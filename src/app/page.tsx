@@ -1,4 +1,3 @@
-// app/page.tsx
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SubscriptionCards } from "@/components/pricing/SubscriptionCards";
