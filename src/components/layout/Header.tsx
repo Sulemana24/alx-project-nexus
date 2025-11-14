@@ -41,7 +41,7 @@ export const Header: React.FC = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo and Site Name */}
           <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Link href="/" className="flex items-center">
                 <div className="bg-[#3B82F6] text-white w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xl">
                   L
