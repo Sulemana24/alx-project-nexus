@@ -1,31 +1,56 @@
+"use client";
+
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+
+/* import { Card } from "@/components/ui/Card"; */
 import { SubscriptionCards } from "@/components/pricing/SubscriptionCards";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-amber-50 font-sans">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-amber-50 font-sans">
       {/* Hero Section */}
-      <section className="pt-20 pb-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+      <section
+        className="relative pt-20 pb-16 px-4 sm:px-6 lg:px-8
+      bg-cover bg-center bg-no-repeat
+    "
+        style={{
+          backgroundImage:
+            "url('https://images.pexels.com/photos/4145354/pexels-photo-4145354.jpeg')",
+        }}
+      >
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
+
+        <div className="relative max-w-7xl mx-auto">
+          <div className="text-center text-white">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6">
               Welcome to <span className="text-[#3B82F6]">Learnify</span>
             </h1>
-            <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              Transform your PDF past questions into interactive quizzes with
+
+            <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto text-blue-100">
+              Transform your PDFs & past questions into interactive quizzes with
               AI-powered learning experiences.
             </p>
-            <p className="text-lg text-gray-500 mb-12 max-w-2xl mx-auto">
+
+            <p className="text-lg mb-12 max-w-2xl mx-auto text-blue-200">
               Built for AAMUSTED-K and educational institutions. Practice
               smarter, teach better.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button size="lg" className="text-lg px-8 py-4">
+              <Button
+                size="lg"
+                className="text-lg px-8 py-4"
+                onClick={() => (window.location.href = "/auth")}
+              >
                 Get Started Free
               </Button>
-              <Button variant="outline" size="lg" className="text-lg px-8 py-4">
+
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-lg px-8 py-4 bg-white/20 backdrop-blur-sm border-white text-white hover:bg-white/30"
+              >
                 Watch Demo
               </Button>
             </div>
