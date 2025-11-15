@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { useState, useEffect } from "react";
 import CountUp from "react-countup";
@@ -13,6 +13,8 @@ import {
 } from "@/data/mock-data";
 import { UserRole, SubscriptionStatus } from "@/types";
 import { universities } from "@/data/universityFaculties";
+import { useYouTubeSearch } from "@/hooks/useYouTubeSearch";
+import { VideoResource } from "@/lib/youtube-api";
 
 export type UniversityKey = keyof typeof universities;
 interface StudentDashboardProps {
@@ -55,6 +57,16 @@ interface Quiz {
   questions: QuizQuestion[];
   totalMarks: number;
 }
+
+interface Video {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  thumbnail?: string;
+  createdAt: Date;
+}
+
+type VideoResource = Video;
 
 interface VideoProgress {
   [key: string]: number;
@@ -124,9 +136,67 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   };
 
+  // Helper function to get recently accessed videos
+  const getRecentlyAccessedVideos = () => {
+    // Get videos that have progress > 0 from ALL videos
+    const accessedVideos = getAllVideos().filter(
+      (video) => videoProgress[video.id] > 0
+    );
+
+    // Sort by progress (highest first) or by last accessed
+    return accessedVideos.sort((a, b) => {
+      // You could also sort by last accessed timestamp if you track it
+      return (videoProgress[b.id] || 0) - (videoProgress[a.id] || 0);
+    });
+  };
+
+  // Helper functions for videos and thumbnails
+  const getAllVideos = () => {
+    // Combine mock videos and search results to ensure selected video is always available
+    const allVideos = [...mockVideos];
+    searchResults.forEach((video) => {
+      if (!allVideos.find((v) => v.id === video.id)) {
+        allVideos.push(video);
+      }
+    });
+    return allVideos;
+  };
+
+  const getVideoThumbnail = (video: Video) => {
+    // Check if thumbnail exists and is a valid URL
+    if (
+      video.thumbnail &&
+      (video.thumbnail.startsWith("http") || video.thumbnail.startsWith("/"))
+    ) {
+      return video.thumbnail;
+    }
+
+    // If it's a YouTube video, construct thumbnail URL from video ID
+    const videoId = getYouTubeVideoId(video.youtubeUrl);
+    if (videoId) {
+      return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    }
+
+    // Fallback to placeholder
+    return getFallbackThumbnail();
+  };
+
+  const getFallbackThumbnail = () => {
+    // You can use a local placeholder or a generic YouTube placeholder
+    return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%23f3f4f6'/%3E%3Cpath d='M160 90l40 30-40 30z' fill='%236b7280'/%3E%3C/svg%3E";
+  };
+
+  const getYouTubeVideoId = (url: string) => {
+    if (!url) return "";
+    const match = url.match(
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/
+    );
+    return match ? match[1] : "";
+  };
+
   const handleSubmitQuiz = () => {
     // Calculate score
-    if (!currentQuiz) return; // stop if no quiz is selected
+    if (!currentQuiz) return;
 
     const score = currentQuiz.questions.reduce((total, question, index) => {
       if (answers[index] === question.correctAnswer) {
@@ -163,13 +233,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   }, [quizStarted, timeLeft]);
 
   // State for e-learning section
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-  const [videoProgress, setVideoProgress] = useState<VideoProgress>({
-    "video-1": 65,
-    "video-2": 30,
-    "video-3": 85,
-  });
+  const [videoProgress, setVideoProgress] = useState<Record<string, number>>(
+    {}
+  );
 
   // State for settings section
   const [settings, setSettings] = useState({
@@ -253,7 +320,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       alert(
         "Please select a course and enter a topic before generating a quiz."
       );
-      return; // Stop execution
+      return;
     }
 
     console.log("Generating quiz with:", practiceForm);
@@ -263,40 +330,28 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     );
   };
 
-  // Extract YouTube video ID from URL
-  const getYouTubeVideoId = (url: string) => {
-    const match = url.match(
-      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/
-    );
-    return match ? match[1] : null;
+  // Use the YouTube search hook
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    isLoading,
+    error,
+    handleSearch,
+  } = useYouTubeSearch();
+
+  const updateVideoProgress = (videoId: string, progress: number) => {
+    setVideoProgress((prev) => ({
+      ...prev,
+      [videoId]: progress,
+    }));
   };
-
-  // Filter videos based on search query
-  const filteredVideos = mockVideos.filter(
-    (video) =>
-      video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      video.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      video.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const currentVideo = mockVideos.find((v) => v.id === selectedVideo);
-  const videoId = currentVideo
-    ? getYouTubeVideoId(currentVideo.youtubeUrl)
-    : null;
 
   // Toggle settings
   const toggleSetting = (setting: keyof typeof settings) => {
     setSettings((prev) => ({
       ...prev,
       [setting]: !prev[setting],
-    }));
-  };
-
-  // Update video progress (simulated)
-  const updateVideoProgress = (videoId: string, progress: number) => {
-    setVideoProgress((prev) => ({
-      ...prev,
-      [videoId]: progress,
     }));
   };
 
@@ -414,7 +469,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     onClick={() => setActiveSidebarItem(item.id)}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                       activeSidebarItem === item.id
-                        ? "bg-gradient-to-r from-blue-50 to-violet-50 text-blue-600 border border-blue-100"
+                        ? "bg-linear-to-r from-blue-50 to-violet-50 text-blue-600 border border-blue-100"
                         : "text-gray-600 hover:bg-gray-50"
                     }`}
                   >
@@ -755,13 +810,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       >
                         Previous
                       </Button>
-
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">
-                          {currentQuestionIndex + 1} /{" "}
-                          {currentQuiz.questions.length}
-                        </span>
-                      </div>
 
                       {currentQuestionIndex ===
                       currentQuiz.questions.length - 1 ? (
@@ -1178,10 +1226,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 {/* Header */}
                 <div className="text-center mb-8">
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    E-Learning Resources
+                    Continue Learning
                   </h2>
                   <p className="text-gray-600">
-                    Watch educational videos and track your learning progress
+                    Pick up where you left off with your recently accessed
+                    videos
                   </p>
                 </div>
 
@@ -1193,164 +1242,272 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search videos by title, description, or category..."
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Search for new educational videos..."
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                       />
                     </div>
-                    <button className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
-                      Search
+                    <button
+                      onClick={() => handleSearch(searchQuery)}
+                      disabled={isLoading}
+                      className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:bg-blue-300 disabled:cursor-not-allowed"
+                    >
+                      {isLoading ? "Searching..." : "Search"}
                     </button>
                   </div>
-
-                  {/* Video Player */}
-                  {selectedVideo && (
-                    <div className="mb-8">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Now Playing:{" "}
-                        {mockVideos.find((v) => v.id === selectedVideo)?.title}
-                      </h3>
-                      <div className="aspect-w-16 aspect-h-9 bg-black rounded-lg overflow-hidden">
-                        <iframe
-                          src={`https://www.youtube.com/embed/${getYouTubeVideoId(
-                            mockVideos.find((v) => v.id === selectedVideo)
-                              ?.youtubeUrl || ""
-                          )}?autoplay=1`}
-                          className="w-full h-64 md:h-96"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          onClick={() => setSelectedVideo(null)}
-                          className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-                        >
-                          Close Player
-                        </button>
-                        <button
-                          onClick={() =>
-                            updateVideoProgress(selectedVideo, 100)
-                          }
-                          className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
-                        >
-                          Mark as Completed
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Video Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredVideos.map((video) => (
-                      <div
-                        key={video.id}
-                        className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-                      >
-                        <div
-                          className="aspect-w-16 aspect-h-9 bg-gray-200 cursor-pointer"
-                          onClick={() => setSelectedVideo(video.id)}
-                        >
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="w-full h-48 object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
-                            <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
-                              <svg
-                                className="w-8 h-8 text-white"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-4">
-                          <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
-                            {video.title}
-                          </h4>
-                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                            {video.description}
-                          </p>
-                          <div className="flex justify-between items-center text-sm text-gray-500">
-                            <span>{video.duration}</span>
-                            <span>{video.views} views</span>
-                          </div>
-                          <div className="mt-3">
-                            <div className="flex justify-between text-sm text-gray-600 mb-1">
-                              <span>Progress</span>
-                              <span>{videoProgress[video.id] || 0}%</span>
-                            </div>
-                            <div className="w-full h-2 bg-gray-200 rounded-full">
-                              <div
-                                className="h-2 bg-blue-500 rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${videoProgress[video.id] || 0}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setSelectedVideo(video.id)}
-                            className="w-full mt-3 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                          >
-                            Watch Now
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
-                {/* Recent Access Videos */}
+                {/* Loading State */}
+                {isLoading && (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                    {error}
+                  </div>
+                )}
+
+                {/* Video Player - Fixed: Use allVideos instead of displayedVideos */}
+                {selectedVideo && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Now Playing:{" "}
+                      {
+                        getAllVideos().find((v) => v.id === selectedVideo)
+                          ?.title
+                      }
+                    </h3>
+                    <div className="bg-black rounded-lg overflow-hidden">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${getYouTubeVideoId(
+                          getAllVideos().find((v) => v.id === selectedVideo)
+                            ?.youtubeUrl || ""
+                        )}?autoplay=1`}
+                        className="w-full h-64 md:h-96"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={() => setSelectedVideo(null)}
+                        className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                      >
+                        Close Player
+                      </button>
+                      <button
+                        onClick={() => updateVideoProgress(selectedVideo, 100)}
+                        className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                      >
+                        Mark as Completed
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recently Accessed Videos - MAIN CONTENT */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Continue Watching
-                  </h3>
-                  <div className="space-y-4">
-                    {mockVideos
-                      .filter(
-                        (video) =>
-                          videoProgress[video.id] > 0 &&
-                          videoProgress[video.id] < 100
-                      )
-                      .map((video) => (
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Recently Accessed Videos
+                    </h3>
+                    <span className="text-sm text-gray-500">
+                      {getRecentlyAccessedVideos().length} videos
+                    </span>
+                  </div>
+
+                  {getRecentlyAccessedVideos().length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg
+                          className="w-12 h-12 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-medium text-gray-900 mb-2">
+                        No videos watched yet
+                      </h4>
+                      <p className="text-gray-600 mb-4">
+                        Start watching videos to see them here
+                      </p>
+                      <button
+                        onClick={() => setSearchQuery("programming tutorial")}
+                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        Explore Videos
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {getRecentlyAccessedVideos().map((video) => (
                         <div
                           key={video.id}
-                          className="flex items-center space-x-4 p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
                         >
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="w-20 h-12 object-cover rounded-lg"
-                          />
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">
-                              {video.title}
-                            </p>
-                            <div className="flex justify-between text-sm text-gray-600 mb-1">
-                              <span>Progress</span>
-                              <span>{videoProgress[video.id]}%</span>
-                            </div>
-                            <div className="w-full h-2 bg-gray-200 rounded-full">
-                              <div
-                                className="h-2 bg-green-500 rounded-full transition-all duration-300"
-                                style={{ width: `${videoProgress[video.id]}%` }}
-                              />
-                            </div>
-                          </div>
-                          <button
+                          <div
+                            className="relative bg-gray-200 cursor-pointer"
                             onClick={() => setSelectedVideo(video.id)}
-                            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
                           >
-                            Continue
-                          </button>
+                            {/* Fixed thumbnail with better fallback */}
+                            <Image
+                              src={getVideoThumbnail(video)}
+                              alt={video.title}
+                              width={800}
+                              height={450}
+                              className="w-full h-48 object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = getFallbackThumbnail();
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
+                              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
+                                <svg
+                                  className="w-8 h-8 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                            {/* Progress overlay on thumbnail */}
+                            {videoProgress[video.id] > 0 && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-300">
+                                <div
+                                  className="h-1 bg-blue-500 transition-all duration-300"
+                                  style={{
+                                    width: `${videoProgress[video.id]}%`,
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                              {video.title}
+                            </h4>
+                            <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                              {video.description}
+                            </p>
+                            <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
+                              <span className="truncate">
+                                By: {video.createdBy}
+                              </span>
+                              <span>
+                                {videoProgress[video.id] === 100
+                                  ? "Completed"
+                                  : "In Progress"}
+                              </span>
+                            </div>
+                            <div className="mb-3">
+                              <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                <span>Progress</span>
+                                <span>{videoProgress[video.id] || 0}%</span>
+                              </div>
+                              <div className="w-full h-2 bg-gray-200 rounded-full">
+                                <div
+                                  className={`h-2 rounded-full transition-all duration-300 ${
+                                    videoProgress[video.id] === 100
+                                      ? "bg-green-500"
+                                      : "bg-blue-500"
+                                  }`}
+                                  style={{
+                                    width: `${videoProgress[video.id] || 0}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setSelectedVideo(video.id)}
+                              className={`w-full py-2 rounded-lg transition-colors ${
+                                videoProgress[video.id] === 100
+                                  ? "bg-green-500 hover:bg-green-600 text-white"
+                                  : "bg-blue-500 hover:bg-blue-600 text-white"
+                              }`}
+                            >
+                              {videoProgress[video.id] === 100
+                                ? "Watch Again"
+                                : "Continue Watching"}
+                            </button>
+                          </div>
                         </div>
                       ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Search Results Section - Only show when searching */}
+                {searchQuery && searchResults.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Search Results for &quot;{searchQuery}&quot;
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {searchResults.map((video) => (
+                        <div
+                          key={video.id}
+                          className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                        >
+                          <div
+                            className="relative bg-gray-200 cursor-pointer"
+                            onClick={() => setSelectedVideo(video.id)}
+                          >
+                            <Image
+                              src={getVideoThumbnail(video)}
+                              alt={video.title}
+                              className="w-full h-48 object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = getFallbackThumbnail();
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
+                              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
+                                <svg
+                                  className="w-8 h-8 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                              {video.title}
+                            </h4>
+                            <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                              {video.description}
+                            </p>
+                            <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
+                              <span>By: {video.createdBy}</span>
+                            </div>
+                            <button
+                              onClick={() => setSelectedVideo(video.id)}
+                              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                              Watch Now
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
