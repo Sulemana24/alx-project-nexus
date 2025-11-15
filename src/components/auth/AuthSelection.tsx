@@ -20,14 +20,27 @@ export const AuthSelection: React.FC<AuthSelectionProps> = ({
         {/* Header */}
         <div className="text-center">
           <div className="flex items-center justify-center space-x-3 mb-6">
-            <div className="bg-[#3B82F6] text-white w-12 h-12 rounded-lg flex items-center justify-center font-bold text-2xl">
+            <div
+              className="bg-[#3b82f6] text-white w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-lg mb-4 cursor-pointer transition-all duration-300 hover:scale-110 hover:rotate-12 hover:bg-blue-700 active:scale-95"
+              onClick={() => (window.location.href = "/")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  console.log("Logo activated via keyboard!");
+                  window.location.href = "/";
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label="Learnify logo - click to go back home"
+            >
               L
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Learnify</h1>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {/* <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Join Learnify
-          </h2>
+          </h2> */}
           <p className="text-gray-600">Choose how you want to use Learnify</p>
         </div>
 
