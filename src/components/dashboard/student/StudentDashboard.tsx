@@ -63,10 +63,8 @@ interface Video {
   title: string;
   youtubeUrl: string;
   thumbnail?: string;
-  createdAt: Date;
+  createdAt?: string;
 }
-
-type VideoResource = Video;
 
 interface VideoProgress {
   [key: string]: number;
@@ -162,7 +160,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return allVideos;
   };
 
-  const getVideoThumbnail = (video: Video) => {
+  const getVideoThumbnail = (video: Video | VideoResource) => {
     // Check if thumbnail exists and is a valid URL
     if (
       video.thumbnail &&
