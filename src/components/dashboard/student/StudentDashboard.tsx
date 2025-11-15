@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import CountUp from "react-countup";
 import {
   mockQuizAttempts,
@@ -41,6 +41,21 @@ interface UploadedPDF {
   size: string;
 }
 
+interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  marks: number;
+}
+
+interface Quiz {
+  id: string;
+  title: string;
+  duration: number;
+  questions: QuizQuestion[];
+  totalMarks: number;
+}
+
 interface VideoProgress {
   [key: string]: number;
 }
@@ -72,6 +87,80 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     difficulty: "medium",
     type: "multiple-choice",
   });
+
+  const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [answers, setAnswers] = useState<{ [key: number]: number }>({});
+  const [quizStarted, setQuizStarted] = useState(false);
+
+  const startQuiz = (quiz: Quiz) => {
+    setCurrentQuiz(quiz);
+    setCurrentQuestionIndex(0);
+    setTimeLeft(quiz.duration * 60);
+    setAnswers({});
+    setQuizStarted(true);
+  };
+
+  const handleAnswerSelect = (optionIndex: number) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [currentQuestionIndex]: optionIndex,
+    }));
+  };
+
+  const handleNextQuestion = () => {
+    if (
+      currentQuiz &&
+      currentQuestionIndex < currentQuiz.questions.length - 1
+    ) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => prev - 1);
+    }
+  };
+
+  const handleSubmitQuiz = () => {
+    // Calculate score
+    if (!currentQuiz) return; // stop if no quiz is selected
+
+    const score = currentQuiz.questions.reduce((total, question, index) => {
+      if (answers[index] === question.correctAnswer) {
+        return total + question.marks;
+      }
+      return total;
+    }, 0);
+
+    // Show results
+    alert(`Quiz submitted! Your score: ${score}/${currentQuiz.totalMarks}`);
+
+    // Reset quiz state
+    setCurrentQuiz(null);
+    setQuizStarted(false);
+    setTimeLeft(0);
+  };
+
+  // Timer effect
+  useEffect(() => {
+    if (!quizStarted || timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [quizStarted, timeLeft]);
 
   // State for e-learning section
   const [searchQuery, setSearchQuery] = useState("");
@@ -212,11 +301,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="min-h-screen bg-gray-50 relative pt-20">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-4 sm:px-6 py-4 flex justify-between items-center">
+      <header className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-40">
+        <div className="px-4 sm:px-6 py-4 flex justify-between items-center max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
+            {/* Sidebar toggle for mobile */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -235,6 +325,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 />
               </svg>
             </button>
+
+            {/* Logo */}
             <div className="bg-blue-500 text-white w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm">
               L
             </div>
@@ -243,6 +335,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </span>
           </div>
 
+          {/* Right side actions */}
           <div className="flex items-center space-x-3 sm:space-x-4">
             {userPlan === "free" && (
               <button className="bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
@@ -250,6 +343,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </button>
             )}
 
+            {/* User dropdown */}
             <div className="relative">
               <button
                 onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
@@ -284,7 +378,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <button
                       onClick={() => {
                         localStorage.clear();
-
                         window.location.href = "/auth";
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
@@ -527,87 +620,260 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <p className="text-gray-600">
                     Track your quiz performance and upcoming assessments
                   </p>
-                  <Button className="mt-4">Join Quiz</Button>
-                </div>
 
-                {/* Upcoming Quiz */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Upcoming Quiz
-                  </h3>
-                  {mockQuizzes.slice(0, 1).map((quiz) => (
-                    <div
-                      key={quiz.id}
-                      className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0"
+                  {/* Join Quiz Form */}
+                  <div className="mt-4 bg-white border border-gray-200 rounded-xl p-6 max-w-md mx-auto">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Join a Quiz
+                    </h3>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.currentTarget);
+                        const quizCode = formData.get("quizCode") as string;
+                        const studentName = formData.get(
+                          "studentName"
+                        ) as string;
+
+                        // Handle join quiz logic here
+                        console.log("Joining quiz:", { quizCode, studentName });
+                        alert(`Joining quiz ${quizCode} as ${studentName}`);
+                      }}
+                      className="space-y-4"
                     >
-                      <div className="space-y-2">
-                        <p className="font-semibold text-gray-900">
-                          {quiz.title}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Date: {quiz.createdAt.toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Duration: {quiz.duration} mins
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Lecturer: {quiz.creator.name}
-                        </p>
+                      <div>
+                        <label
+                          htmlFor="quizCode"
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          Quiz Code
+                        </label>
+                        <input
+                          type="text"
+                          id="quizCode"
+                          name="quizCode"
+                          placeholder="Enter quiz code"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black placeholder-gray-400"
+                        />
                       </div>
-                      <Button className=" w-full md:w-auto">Join Quiz</Button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Recent History */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Recent History
-                  </h3>
-                  <div className="space-y-4">
-                    {mockQuizAttempts.map((attempt) => (
-                      <div
-                        key={attempt.id}
-                        className="p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
-                          <div className="space-y-1">
-                            <p className="font-medium text-gray-900">
-                              {attempt.quiz.title}
-                            </p>
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                              <span>
-                                Date: {attempt.completedAt.toLocaleDateString()}
-                              </span>
-                              <span>
-                                Duration: {Math.floor(attempt.timeSpent / 60)}{" "}
-                                mins
-                              </span>
-                              <span>Lecturer: {attempt.quiz.creator.name}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                attempt.score >= 70
-                                  ? "bg-green-100 text-green-800"
-                                  : attempt.score >= 50
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              Grade:{" "}
-                              {Math.round(
-                                (attempt.score / attempt.totalMarks) * 100
-                              )}
-                              %
-                            </span>
-                          </div>
-                        </div>
+                      <div>
+                        <label
+                          htmlFor="studentName"
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          Your Name
+                        </label>
+                        <input
+                          type="text"
+                          id="studentName"
+                          name="studentName"
+                          placeholder="Enter your name"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black placeholder-gray-400"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <label
+                          htmlFor="studentIndex"
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          Your Index Number
+                        </label>
+                        <input
+                          type="text"
+                          id="studentNumber"
+                          name="studentNumber"
+                          placeholder="Enter your index number"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black placeholder-gray-400"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full">
+                        Join Quiz
+                      </Button>
+                    </form>
                   </div>
                 </div>
+
+                {/* Quiz Interface */}
+                {currentQuiz ? (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    {/* Quiz Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {currentQuiz.title}
+                        </h3>
+                        <p className="text-gray-600">
+                          Question {currentQuestionIndex + 1} of{" "}
+                          {currentQuiz.questions.length}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-4 mt-4 md:mt-0">
+                        <div className="bg-red-100 text-red-800 px-4 py-2 rounded-lg font-semibold">
+                          Time Left: {Math.floor(timeLeft / 60)}:
+                          {(timeLeft % 60).toString().padStart(2, "0")}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Current Question */}
+                    <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        {currentQuiz.questions[currentQuestionIndex].question}
+                      </h4>
+
+                      <div className="space-y-3">
+                        {currentQuiz.questions[
+                          currentQuestionIndex
+                        ].options.map((option, index) => (
+                          <label
+                            key={index}
+                            className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="radio"
+                              name="quiz-answer"
+                              value={index}
+                              checked={answers[currentQuestionIndex] === index}
+                              onChange={() => handleAnswerSelect(index)}
+                              className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-gray-900">{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Navigation Buttons */}
+                    <div className="flex justify-between items-center">
+                      <Button
+                        onClick={handlePreviousQuestion}
+                        disabled={currentQuestionIndex === 0}
+                        className="bg-gray-600 hover:bg-gray-700 text-white"
+                      >
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600">
+                          {currentQuestionIndex + 1} /{" "}
+                          {currentQuiz.questions.length}
+                        </span>
+                      </div>
+
+                      {currentQuestionIndex ===
+                      currentQuiz.questions.length - 1 ? (
+                        <Button
+                          onClick={handleSubmitQuiz}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Submit Quiz
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleNextQuestion}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          Next Question
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Upcoming Quiz */}
+                    <div className="bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                        Upcoming Quiz
+                      </h3>
+                      {mockQuizzes.slice(0, 1).map((quiz) => (
+                        <div
+                          key={quiz.id}
+                          className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0"
+                        >
+                          <div className="space-y-2">
+                            <p className="font-semibold text-gray-900">
+                              {quiz.title}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Date: {quiz.createdAt.toLocaleDateString()}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Duration: {quiz.duration} mins
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Questions: {quiz.questions.length}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Lecturer: {quiz.creator.name}
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => startQuiz(quiz)}
+                            className="w-full md:w-auto "
+                          >
+                            Start Quiz
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Recent History */}
+                    <div className="bg-white rounded-xl border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                        Recent History
+                      </h3>
+                      <div className="space-y-4">
+                        {mockQuizAttempts.map((attempt) => (
+                          <div
+                            key={attempt.id}
+                            className="p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
+                              <div className="space-y-1">
+                                <p className="font-medium text-gray-900">
+                                  {attempt.quiz.title}
+                                </p>
+                                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                  <span>
+                                    Date:{" "}
+                                    {attempt.completedAt.toLocaleDateString()}
+                                  </span>
+                                  <span>
+                                    Duration:{" "}
+                                    {Math.floor(attempt.timeSpent / 60)} mins
+                                  </span>
+                                  <span>
+                                    Lecturer: {attempt.quiz.creator.name}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-4">
+                                <span
+                                  className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                    attempt.score >= 70
+                                      ? "bg-green-100 text-green-800"
+                                      : attempt.score >= 50
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  Grade:{" "}
+                                  {Math.round(
+                                    (attempt.score / attempt.totalMarks) * 100
+                                  )}
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -615,7 +881,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             {activeSidebarItem === "passco" && (
               <div className="space-y-8">
                 {/* Header */}
-                <div className="text-center mb-8">
+                <div className="text-center mb-8 px-2 sm:px-4">
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">
                     Past Questions
                   </h2>
@@ -625,8 +891,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
 
                 {/* Search and Filters */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <div className="flex flex-col md:flex-row gap-4 mb-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
                     <div className="flex-1">
                       <input
                         type="text"
@@ -634,8 +900,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <select className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black">
+                    <div className="flex flex-col sm:flex-row sm:gap-2 gap-2 w-full sm:w-auto">
+                      <select className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black w-full sm:w-auto">
                         <option value="">All Years</option>
                         {Array.from(
                           { length: 2026 - 2010 + 1 },
@@ -647,7 +913,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         ))}
                       </select>
                       <select
-                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black w-full sm:w-auto"
                         value={selectedUniversity}
                         onChange={(e) => {
                           setSelectedUniversity(
@@ -666,7 +932,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           ))}
                       </select>
                       <select
-                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black w-full sm:w-auto"
                         value={selectedFaculty}
                         onChange={(e) => setSelectedFaculty(e.target.value)}
                         disabled={!selectedUniversity}
@@ -690,7 +956,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </div>
 
                   {/* Past Questions List */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {mockPastQuestions.map((pq) => (
                       <div
                         key={pq.id}
@@ -704,14 +970,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <p>Year: {pq.year}</p>
                           <p>Department: {pq.department}</p>
                         </div>
-                        <Button className="w-full ">View</Button>
+                        <Button className="w-full">View</Button>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Recent Access */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Recently Accessed
                   </h3>
@@ -721,7 +987,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       .map((pq) => (
                         <div
                           key={pq.id}
-                          className="flex items-center justify-between p-3 border border-gray-100 rounded-lg"
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border border-gray-100 rounded-lg gap-2"
                         >
                           <div>
                             <p className="font-medium text-gray-900">

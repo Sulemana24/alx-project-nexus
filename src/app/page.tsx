@@ -124,7 +124,11 @@ export default function Home() {
           <p className="text-xl text-blue-100 mb-8">
             Join thousands of students and teachers already using Learnify
           </p>
-          <Button size="lg" className="text-lg px-8 py-4">
+          <Button
+            size="lg"
+            className="text-lg px-8 py-4"
+            onClick={() => (window.location.href = "/auth")}
+          >
             Start Learning Today
           </Button>
         </div>
