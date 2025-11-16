@@ -1,6 +1,6 @@
 "use client";
 
-import { StudentDashboard } from "@/components/dashboard/student/StudentDashboard";
+import StudentDashboard from "@/components/dashboard/student/StudentDashboard";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";

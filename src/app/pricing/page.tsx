@@ -1,4 +1,3 @@
-// app/pricing/page.tsx
 import { SubscriptionCards } from "@/components/pricing/SubscriptionCards";
 
 export default function PricingPage() {
