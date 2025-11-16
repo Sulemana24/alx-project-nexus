@@ -1,6 +1,10 @@
-// components/pricing/SubscriptionCards.tsx
+"use client";
+
+import React from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/use-toast";
 
 interface SubscriptionPlan {
   id: string;
@@ -15,6 +19,9 @@ interface SubscriptionPlan {
 }
 
 export const SubscriptionCards: React.FC = () => {
+  const router = useRouter();
+  const { toast } = useToast();
+
   const plans: SubscriptionPlan[] = [
     {
       id: "free",
@@ -73,6 +80,32 @@ export const SubscriptionCards: React.FC = () => {
     },
   ];
 
+  const handlePlanSelection = (planId: string) => {
+    switch (planId) {
+      case "free":
+        // Navigate with query param
+        router.push("/auth?plan=free");
+        break;
+
+      case "student-pro":
+        toast({
+          title: "Student Pro plan",
+          description: "Redirecting to payment...",
+        });
+        break;
+
+      case "teacher-pro":
+        toast({
+          title: "Teacher Pro plan",
+          description: "Redirecting to payment...",
+        });
+        break;
+
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       {/* Header */}
@@ -122,7 +155,7 @@ export const SubscriptionCards: React.FC = () => {
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start">
                       <svg
-                        className="w-5 h-5 text-[#FACC15] mr-3 mt-0.5 flex-shrink-0"
+                        className="w-5 h-5 text-[#FACC15] mr-3 mt-0.5 shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -145,6 +178,7 @@ export const SubscriptionCards: React.FC = () => {
                 variant={plan.buttonVariant}
                 size="lg"
                 className="w-full mt-auto"
+                onClick={() => handlePlanSelection(plan.id)}
               >
                 {plan.buttonText}
               </Button>

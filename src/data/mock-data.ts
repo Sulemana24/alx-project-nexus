@@ -22,8 +22,8 @@ import {
 export const mockUsers: User[] = [
   {
     id: "user-1",
-    email: "john.student@university.edu",
-    name: "John Student",
+    email: "sulemana@university.edu",
+    name: "Iddrisu Sulemana",
     role: UserRole.STUDENT,
     avatar: "/avatars/student1.jpg",
     createdAt: new Date("2024-01-15"),
