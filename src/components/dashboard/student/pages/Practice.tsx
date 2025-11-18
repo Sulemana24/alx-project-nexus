@@ -1,15 +1,13 @@
 "use client";
 import { Button } from "@/components/ui/Button";
 import { useState, useEffect } from "react";
-import { mockPracticeSessions } from "@/data/mock-data";
 import PDFUpload from "@/components/dashboard/student/pages/PDFUpload";
 
-interface PracticeForm {
-  course: string;
-  topic: string;
-  numQuestions: string;
-  difficulty: "easy" | "medium" | "hard";
-  type: "multiple-choice" | "true-false" | "fill-in" | "essay";
+// --- INTERFACES ---
+interface GeminiQuestionOutput {
+  question: string;
+  options: { [key: string]: string };
+  answer: string;
 }
 
 interface Question {
@@ -17,6 +15,14 @@ interface Question {
   options: string[];
   correctAnswer: number;
   explanation: string;
+}
+
+interface PracticeForm {
+  course: string;
+  topic: string;
+  numQuestions: string;
+  difficulty: "easy" | "medium" | "hard";
+  type: "multiple-choice" | "true-false" | "fill-in" | "essay";
 }
 
 interface QuizState {
@@ -52,238 +58,50 @@ const Practice = () => {
     error: "",
   });
 
+  const [pdfFileId, setPdfFileId] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [essayAnswers, setEssayAnswers] = useState<Record<number, string>>({});
 
-  // Updated time per question based on difficulty
+  // NEW: Past Questions State
+  const [pastQuestionsText, setPastQuestionsText] = useState<string>("");
+  const [pastQuestionsFile, setPastQuestionsFile] = useState<File | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    "topic" | "pdf" | "past-questions"
+  >("topic");
+
+  // --- HELPER FUNCTIONS ---
+  const mapGeminiQuestions = (
+    geminiQuestions: GeminiQuestionOutput[]
+  ): Question[] => {
+    return geminiQuestions.map((gq, index) => {
+      const optionsArray = Object.values(gq.options);
+      const correctOptionText = gq.options[gq.answer];
+      const correctAnswerIndex = optionsArray.indexOf(correctOptionText);
+
+      return {
+        question: `${index + 1}. ${gq.question}`,
+        options: optionsArray,
+        correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
+        explanation: `The correct answer is ${gq.answer}.`,
+      };
+    });
+  };
+
   const getTimePerQuestion = () => {
     switch (practiceForm.difficulty) {
       case "easy":
-        return 60; // Changed from 40 to 60
+        return 60;
       case "medium":
-        return 40; // Changed from 20 to 40
+        return 40;
       case "hard":
-        return 30; // Changed from 10 to 30
+        return 30;
       default:
         return 40;
     }
   };
 
-  // Handle PDF processing results
-  const handlePDFProcessed = (pdfData: {
-    title: string;
-    content: string;
-    questions: Question[];
-  }) => {
-    setQuizState((prev) => ({
-      ...prev,
-      questions: pdfData.questions,
-      quizStarted: true,
-      currentQuestionIndex: 0,
-      userAnswers: {},
-      timeLeft: getTimePerQuestion(),
-      quizCompleted: false,
-      score: 0,
-    }));
-
-    setPracticeForm((prev) => ({
-      ...prev,
-      course: "PDF Content",
-      topic: pdfData.title,
-    }));
-  };
-
-  // Cancel/quit the current quiz
-  const cancelQuiz = () => {
-    setQuizState({
-      questions: [],
-      currentQuestionIndex: 0,
-      userAnswers: {},
-      timeLeft: 0,
-      quizStarted: false,
-      quizCompleted: false,
-      score: 0,
-      loading: false,
-      error: "",
-    });
-    setEssayAnswers({});
-    setShowCancelConfirm(false);
-    localStorage.removeItem("quizProgress");
-    localStorage.removeItem("practiceForm");
-    localStorage.removeItem("essayAnswers");
-  };
-
-  // Show confirmation dialog before canceling
-  const confirmCancel = () => {
-    setShowCancelConfirm(true);
-  };
-
-  // Function to shuffle array (Fisher-Yates algorithm)
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
-
-  // Enhanced mock question generator with varied questions
-  const generateMockQuestions = (): Question[] => {
-    const numQuestions = parseInt(practiceForm.numQuestions);
-    const questions: Question[] = [];
-
-    // Different question templates for variety based on type
-    const questionTemplates = {
-      "multiple-choice": [
-        "What is the primary concept behind {topic} in {course}?",
-        "Which of the following best describes {topic}?",
-        "How does {topic} relate to fundamental principles in {course}?",
-        "What is the main application of {topic} in real-world {course} scenarios?",
-        "Which statement accurately characterizes {topic}?",
-        "What distinguishes {topic} from similar concepts in {course}?",
-        "How would you implement {topic} in a practical {course} setting?",
-        "What are the key components of {topic}?",
-        "Which principle is most essential for understanding {topic}?",
-        "How does {topic} contribute to the broader field of {course}?",
-        "What historical development led to the understanding of {topic}?",
-        "Which methodology is commonly used when studying {topic}?",
-        "What are the limitations of current approaches to {topic}?",
-        "How has {topic} evolved in modern {course} practice?",
-        "What ethical considerations are associated with {topic}?",
-      ],
-      "true-false": [
-        "{topic} is a fundamental concept in {course}.",
-        "Understanding {topic} requires advanced mathematical knowledge.",
-        "{topic} has been proven to be ineffective in modern applications.",
-        "The principles of {topic} apply universally across all {course} domains.",
-        "{topic} was first discovered in the 21st century.",
-        "Most experts agree that {topic} is essential for {course} mastery.",
-        "{topic} contradicts established theories in {course}.",
-        "Recent research has invalidated the core principles of {topic}.",
-        "{topic} can be applied to solve complex problems in {course}.",
-        "The study of {topic} is primarily theoretical with few practical applications.",
-      ],
-      "fill-in": [
-        "The fundamental principle of ______ is central to understanding {topic}.",
-        "In {course}, the concept of ______ is closely related to {topic}.",
-        "The primary method for analyzing {topic} involves ______.",
-        "______ represents the key innovation in the field of {topic}.",
-        "The relationship between ______ and {topic} is crucial in {course}.",
-        "Modern approaches to {topic} emphasize the importance of ______.",
-        "The theoretical framework for {topic} is based on ______.",
-        "______ demonstrates the practical application of {topic} in {course}.",
-        "The main challenge in implementing {topic} is ______.",
-        "Recent advancements in {topic} have focused on ______.",
-      ],
-      essay: [
-        "Explain the significance of {topic} in the context of {course} and provide examples of its applications.",
-        "Compare and contrast {topic} with related concepts in {course}, highlighting key differences and similarities.",
-        "Describe the historical development of {topic} and its impact on modern {course} practices.",
-        "Analyze the strengths and limitations of current approaches to {topic} in {course}.",
-        "Discuss how {topic} integrates with other fundamental concepts in {course}.",
-        "Evaluate the ethical implications of applying {topic} in real-world {course} scenarios.",
-        "Propose a research study that would advance our understanding of {topic} in {course}.",
-        "Explain how {topic} has evolved over time and predict its future direction in {course}.",
-        "Describe the step-by-step process for implementing {topic} in a practical {course} setting.",
-        "Critically assess the role of {topic} in shaping contemporary {course} methodologies.",
-      ],
-    };
-
-    // Different option patterns based on question type
-    const optionGenerators = {
-      "multiple-choice": (index: number) => [
-        `Correct explanation of ${practiceForm.topic} focusing on core principles`,
-        `Common misunderstanding about ${practiceForm.topic}`,
-        `Unrelated concept that sometimes gets confused with ${practiceForm.topic}`,
-        `Partially correct but incomplete description of ${practiceForm.topic}`,
-      ],
-      "true-false": () => ["True", "False"],
-      "fill-in": (index: number) => [
-        practiceForm.topic,
-        `Core ${practiceForm.topic} principle`,
-        `Essential ${practiceForm.course} concept`,
-        `Fundamental ${practiceForm.topic} theory`,
-      ],
-      essay: (index: number) => [
-        "Sample comprehensive response covering key concepts",
-        "Basic explanation with limited depth",
-        "Advanced theoretical analysis",
-        "Practical application-focused answer",
-      ],
-    };
-
-    const templates =
-      questionTemplates[practiceForm.type as keyof typeof questionTemplates] ||
-      questionTemplates["multiple-choice"];
-    const optionGenerator =
-      optionGenerators[practiceForm.type as keyof typeof optionGenerators] ||
-      optionGenerators["multiple-choice"];
-
-    for (let i = 0; i < numQuestions; i++) {
-      const templateIndex = i % templates.length;
-      const questionText = templates[templateIndex]
-        .replace(/{topic}/g, practiceForm.topic)
-        .replace(/{course}/g, practiceForm.course);
-
-      const originalOptions = optionGenerator(i);
-      const shuffledOptions = shuffleArray(originalOptions);
-      const correctAnswer = shuffledOptions.indexOf(originalOptions[0]);
-
-      // Vary the explanation based on question type and index
-      const explanations = {
-        "multiple-choice": [
-          `This question tests your understanding of ${practiceForm.topic}'s core concepts.`,
-          `This assesses your ability to distinguish ${practiceForm.topic} from related ideas.`,
-          `This evaluates your knowledge of ${practiceForm.topic}'s practical applications.`,
-          `This examines your grasp of ${practiceForm.topic}'s theoretical foundations.`,
-          `This question focuses on the fundamental principles behind ${practiceForm.topic}.`,
-          `This tests your comprehension of how ${practiceForm.topic} functions in ${practiceForm.course}.`,
-        ],
-        "true-false": [
-          `This statement about ${practiceForm.topic} reflects current understanding in ${practiceForm.course}.`,
-          `This assesses factual knowledge about ${practiceForm.topic} in ${practiceForm.course}.`,
-          `This tests common misconceptions about ${practiceForm.topic}.`,
-          `This evaluates your understanding of ${practiceForm.topic}'s established principles.`,
-          `This question verifies your knowledge of ${practiceForm.topic}'s validity in ${practiceForm.course}.`,
-          `This examines whether you can identify accurate statements about ${practiceForm.topic}.`,
-        ],
-        "fill-in": [
-          `This fill-in question assesses your recall of key ${practiceForm.topic} concepts.`,
-          `This tests your ability to identify the central idea related to ${practiceForm.topic}.`,
-          `This evaluates your understanding of ${practiceForm.topic}'s fundamental principles.`,
-          `This examines your knowledge of ${practiceForm.topic} terminology in ${practiceForm.course}.`,
-          `This question focuses on the essential components of ${practiceForm.topic}.`,
-          `This assesses your grasp of ${practiceForm.topic}'s core methodology.`,
-        ],
-        essay: [
-          `This essay question evaluates your comprehensive understanding of ${practiceForm.topic}.`,
-          `This assesses your ability to analyze and synthesize information about ${practiceForm.topic}.`,
-          `This tests your critical thinking skills regarding ${practiceForm.topic} applications.`,
-          `This examines your capacity to articulate complex ideas about ${practiceForm.topic}.`,
-          `This question evaluates your depth of knowledge about ${practiceForm.topic} in ${practiceForm.course}.`,
-          `This assesses your ability to connect ${practiceForm.topic} with broader ${practiceForm.course} concepts.`,
-        ],
-      };
-
-      const explanationType =
-        explanations[practiceForm.type as keyof typeof explanations] ||
-        explanations["multiple-choice"];
-      const explanation = explanationType[i % explanationType.length];
-
-      questions.push({
-        question: `${i + 1}. ${questionText}`,
-        options: shuffledOptions,
-        correctAnswer: correctAnswer,
-        explanation,
-      });
-    }
-
-    return questions;
-  };
-
-  // Generate quiz using mock data
+  // --- QUIZ GENERATION BY TOPIC ---
   const generateRandomQuiz = async () => {
     if (!practiceForm.topic || !practiceForm.course) {
       setQuizState((prev) => ({
@@ -293,13 +111,45 @@ const Practice = () => {
       return;
     }
 
-    setQuizState((prev) => ({ ...prev, loading: true, error: "" }));
+    setQuizState((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      quizStarted: false,
+      quizCompleted: false,
+      questions: [],
+    }));
 
-    setTimeout(() => {
-      const mockQuestions = generateMockQuestions();
+    try {
+      const response = await fetch("/api/generate-quiz", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(practiceForm),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error ||
+            `Failed to generate quiz. Status: ${response.status}`
+        );
+      }
+
+      const geminiQuizData: GeminiQuestionOutput[] = await response.json();
+
+      if (!geminiQuizData || geminiQuizData.length === 0) {
+        throw new Error(
+          "No questions were generated. Please try adjusting your topic or settings."
+        );
+      }
+
+      const newQuestions = mapGeminiQuestions(geminiQuizData);
+
       setQuizState((prev) => ({
         ...prev,
-        questions: mockQuestions,
+        questions: newQuestions,
         quizStarted: true,
         currentQuestionIndex: 0,
         userAnswers: {},
@@ -309,107 +159,230 @@ const Practice = () => {
         loading: false,
       }));
       setEssayAnswers({});
-    }, 1000);
-  };
-
-  // Handle essay answer input
-  const handleEssayAnswer = (answer: string) => {
-    const currentIndex = quizState.currentQuestionIndex;
-    setEssayAnswers((prev) => ({
-      ...prev,
-      [currentIndex]: answer,
-    }));
-
-    // For essay questions, mark as attempted if answer has sufficient length
-    const isAttempted = answer.trim().length > 20;
-    setQuizState((prev) => ({
-      ...prev,
-      userAnswers: {
-        ...prev.userAnswers,
-        [currentIndex]: isAttempted ? 0 : 1, // 0 for attempted, 1 for not attempted
-      },
-    }));
-  };
-
-  const handleSubmitQuiz = () => {
-    let correctCount = 0;
-    quizState.questions.forEach((question, index) => {
-      if (practiceForm.type === "essay") {
-        // For essay questions, consider any substantial answer as "correct" for scoring
-        const essayAnswer = essayAnswers[index];
-        if (essayAnswer && essayAnswer.trim().length > 20) {
-          correctCount++;
-        }
-      } else {
-        if (quizState.userAnswers[index] === question.correctAnswer) {
-          correctCount++;
-        }
-      }
-    });
-
-    const finalScore = (correctCount / quizState.questions.length) * 100;
-
-    setQuizState((prev) => ({
-      ...prev,
-      score: finalScore,
-      quizCompleted: true,
-    }));
-
-    localStorage.removeItem("quizProgress");
-    localStorage.removeItem("practiceForm");
-    localStorage.removeItem("essayAnswers");
-  };
-
-  const handleNextQuestion = () => {
-    setQuizState((prev) => {
-      if (prev.currentQuestionIndex < prev.questions.length - 1) {
-        return {
-          ...prev,
-          currentQuestionIndex: prev.currentQuestionIndex + 1,
-          timeLeft: getTimePerQuestion(),
-        };
-      } else {
-        handleSubmitQuiz();
-        return prev;
-      }
-    });
-  };
-
-  // Timer effect
-  useEffect(() => {
-    if (
-      !quizState.quizStarted ||
-      quizState.quizCompleted ||
-      quizState.questions.length === 0
-    )
-      return;
-
-    const timer = setInterval(() => {
-      setQuizState((prev) => {
-        if (prev.timeLeft <= 1) {
-          handleNextQuestion();
-          return { ...prev, timeLeft: getTimePerQuestion() };
-        }
-        return { ...prev, timeLeft: prev.timeLeft - 1 };
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [
-    quizState.quizStarted,
-    quizState.quizCompleted,
-    quizState.questions.length,
-  ]);
-
-  // Save progress to localStorage
-  useEffect(() => {
-    if (quizState.quizStarted && !quizState.quizCompleted) {
-      localStorage.setItem("quizProgress", JSON.stringify(quizState));
-      localStorage.setItem("practiceForm", JSON.stringify(practiceForm));
-      localStorage.setItem("essayAnswers", JSON.stringify(essayAnswers));
+      setPdfFileId(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("PDF Quiz Generation Error:", message);
+      setQuizState((prev) => ({
+        ...prev,
+        loading: false,
+        error: "PDF quiz generation failed: " + message, // ✅ use message
+      }));
     }
-  }, [quizState, practiceForm, essayAnswers]);
+  };
 
+  // --- PDF HANDLER ---
+  const handlePDFProcessed = async (fileId: string, title: string) => {
+    setPdfLoading(true);
+    setQuizState((prev) => ({ ...prev, loading: true, error: "" }));
+    setPdfFileId(fileId);
+
+    try {
+      console.log("Processing PDF with fileId:", fileId, "title:", title);
+
+      const response = await fetch("/api/generate-quiz-from-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...practiceForm,
+          fileId,
+          topic: practiceForm.topic || "General", // Ensure topic is always provided
+        }),
+      });
+
+      console.log("PDF API response status:", response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("PDF API error details:", errorData);
+        throw new Error(
+          errorData.error ||
+            `Failed to generate quiz from PDF. Status: ${response.status}`
+        );
+      }
+
+      const responseData = await response.json();
+      console.log("PDF API response data:", responseData);
+
+      // Handle different response formats
+      let geminiQuizData: GeminiQuestionOutput[];
+
+      if (Array.isArray(responseData)) {
+        // Direct array response
+        geminiQuizData = responseData;
+      } else if (
+        responseData.questions &&
+        Array.isArray(responseData.questions)
+      ) {
+        // Nested questions array
+        geminiQuizData = responseData.questions;
+      } else if (responseData.quiz && Array.isArray(responseData.quiz)) {
+        // Nested quiz array
+        geminiQuizData = responseData.quiz;
+      } else {
+        // Try to find any array in the response
+        const arrayKeys = Object.keys(responseData).filter((key) =>
+          Array.isArray(responseData[key])
+        );
+        if (arrayKeys.length > 0) {
+          geminiQuizData = responseData[arrayKeys[0]];
+        } else {
+          throw new Error("Invalid response format from PDF quiz generation");
+        }
+      }
+
+      console.log("Processed quiz data:", geminiQuizData);
+
+      if (!geminiQuizData || geminiQuizData.length === 0) {
+        throw new Error(
+          "No questions were generated from the PDF. Please try a different PDF or topic."
+        );
+      }
+
+      const newQuestions = mapGeminiQuestions(geminiQuizData);
+
+      setQuizState((prev) => ({
+        ...prev,
+        questions: newQuestions,
+        quizStarted: true,
+        currentQuestionIndex: 0,
+        userAnswers: {},
+        timeLeft: getTimePerQuestion(),
+        quizCompleted: false,
+        score: 0,
+        loading: false,
+      }));
+
+      // Update the form with PDF context
+      setPracticeForm((prev) => ({
+        ...prev,
+        course: "PDF Analysis",
+        topic: title || "PDF Content",
+      }));
+
+      console.log(
+        "✅ PDF quiz successfully loaded with",
+        newQuestions.length,
+        "questions"
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("PDF Quiz Generation Error:", message);
+      setQuizState((prev) => ({
+        ...prev,
+        loading: false,
+        error: "PDF quiz generation failed: " + message,
+      }));
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // --- PAST QUESTIONS HANDLER ---
+  const handlePastQuestionsProcessed = async () => {
+    if (!pastQuestionsText && !pastQuestionsFile) {
+      setQuizState((prev) => ({
+        ...prev,
+        error: "Please provide past questions either by text or file upload.",
+      }));
+      return;
+    }
+
+    setQuizState((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+    }));
+
+    try {
+      let pastQuestionsContent = pastQuestionsText;
+
+      // If file uploaded, read text
+      if (pastQuestionsFile) {
+        if (pastQuestionsFile.type === "application/pdf") {
+          pastQuestionsContent = "PDF content would be extracted here"; // TODO
+        } else {
+          pastQuestionsContent = await readTextFile(pastQuestionsFile);
+        }
+      }
+
+      const response = await fetch("/api/generate-quiz-from-past-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pastQuestions: pastQuestionsContent,
+          topic: practiceForm.topic,
+          course: practiceForm.course,
+          numQuestions: practiceForm.numQuestions,
+          difficulty: practiceForm.difficulty,
+          type: practiceForm.type,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate quiz from past questions.");
+      }
+
+      const geminiQuizData: GeminiQuestionOutput[] = await response.json();
+
+      if (!geminiQuizData || geminiQuizData.length === 0) {
+        setQuizState((prev) => ({
+          ...prev,
+          loading: false,
+          error:
+            "No questions were generated. Try providing different past questions.",
+        }));
+        return;
+      }
+
+      const newQuestions = mapGeminiQuestions(geminiQuizData);
+
+      setQuizState((prev) => ({
+        ...prev,
+        questions: newQuestions,
+        quizStarted: true,
+        currentQuestionIndex: 0,
+        userAnswers: {},
+        timeLeft: getTimePerQuestion(),
+        quizCompleted: false,
+        score: 0,
+        loading: false,
+      }));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Past Questions Quiz Generation Error:", message);
+
+      setQuizState((prev) => ({
+        ...prev,
+        loading: false,
+        error:
+          message ||
+          "An error occurred generating the quiz from past questions.",
+      }));
+    }
+  };
+
+  // Helper function to read text file
+  const readTextFile = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  // Handle file upload for past questions
+  const handlePastQuestionsFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPastQuestionsFile(file);
+    }
+  };
+
+  // --- QUIZ NAVIGATION ---
   const handlePracticeFormChange = (field: string, value: string) => {
     setPracticeForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -424,19 +397,35 @@ const Practice = () => {
     }));
   };
 
-  const handlePreviousQuestion = () => {
-    setQuizState((prev) => {
-      if (prev.currentQuestionIndex > 0) {
-        return {
-          ...prev,
-          currentQuestionIndex: prev.currentQuestionIndex - 1,
-          timeLeft: getTimePerQuestion(),
-        };
-      }
-      return prev;
-    });
+  const handleEssayAnswer = (answer: string) => {
+    const currentIndex = quizState.currentQuestionIndex;
+    setEssayAnswers((prev) => ({ ...prev, [currentIndex]: answer }));
   };
 
+  const handleNextQuestion = () => {
+    if (quizState.currentQuestionIndex < quizState.questions.length - 1) {
+      setQuizState((prev) => ({
+        ...prev,
+        currentQuestionIndex: prev.currentQuestionIndex + 1,
+        timeLeft: getTimePerQuestion(),
+      }));
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (quizState.currentQuestionIndex > 0) {
+      setQuizState((prev) => ({
+        ...prev,
+        currentQuestionIndex: prev.currentQuestionIndex - 1,
+        timeLeft: getTimePerQuestion(),
+      }));
+    }
+  };
+
+  /*   const handleSubmitQuiz = () => {
+    setQuizState((prev) => ({ ...prev, quizCompleted: true, timeLeft: 0 }));
+  };
+ */
   const restartQuiz = () => {
     setQuizState({
       questions: [],
@@ -450,53 +439,106 @@ const Practice = () => {
       error: "",
     });
     setEssayAnswers({});
-    localStorage.removeItem("quizProgress");
-    localStorage.removeItem("practiceForm");
-    localStorage.removeItem("essayAnswers");
+    setPdfFileId(null);
+    setPastQuestionsText("");
+    setPastQuestionsFile(null);
   };
 
-  // Calculate detailed results
-  const calculateDetailedResults = () => {
-    const results = { correct: 0, incorrect: 0, skipped: 0 };
+  // --- TIMER ---
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (
+      quizState.quizStarted &&
+      !quizState.quizCompleted &&
+      quizState.timeLeft > 0
+    ) {
+      timer = setTimeout(() => {
+        setQuizState((prev) => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
+      }, 1000);
+    } else if (
+      quizState.timeLeft === 0 &&
+      quizState.quizStarted &&
+      !quizState.quizCompleted
+    ) {
+      handleNextQuestion();
+    }
+    return () => clearTimeout(timer);
+  }, [quizState.quizStarted, quizState.quizCompleted, quizState.timeLeft]);
+
+  // --- CANCEL CONFIRMATION ---
+  const cancelQuiz = () => {
+    setQuizState({
+      questions: [],
+      currentQuestionIndex: 0,
+      userAnswers: {},
+      timeLeft: 0,
+      quizStarted: false,
+      quizCompleted: false,
+      score: 0,
+      loading: false,
+      error: "",
+    });
+    setEssayAnswers({});
+    setShowCancelConfirm(false);
+    setPdfFileId(null);
+    setPastQuestionsText("");
+    setPastQuestionsFile(null);
+  };
+
+  const confirmCancel = () => setShowCancelConfirm(true);
+
+  // --- RESULTS CALCULATION ---
+  const calculateDetailedResults = (): {
+    correct: number;
+    incorrect: number;
+    skipped: number;
+    score: number;
+  } => {
+    let correct = 0,
+      incorrect = 0,
+      skipped = 0;
+
     quizState.questions.forEach((question, index) => {
+      const userAnswer = quizState.userAnswers[index];
+      const essayAnswer = essayAnswers[index];
+
       if (practiceForm.type === "essay") {
-        const essayAnswer = essayAnswers[index];
-        if (essayAnswer && essayAnswer.trim().length > 20) {
-          results.correct++;
-        } else if (essayAnswer === undefined) {
-          results.skipped++;
-        } else {
-          results.incorrect++;
-        }
+        if (essayAnswer && essayAnswer.length > 20) correct++;
+        else if (!essayAnswer) skipped++;
+        else incorrect++;
       } else {
-        const userAnswer = quizState.userAnswers[index];
-        if (userAnswer === undefined) results.skipped++;
-        else if (userAnswer === question.correctAnswer) results.correct++;
-        else results.incorrect++;
+        if (userAnswer === undefined) skipped++;
+        else if (userAnswer === question.correctAnswer) correct++;
+        else incorrect++;
       }
     });
-    return results;
+
+    const score = (correct / quizState.questions.length) * 100;
+    return { correct, incorrect, skipped, score };
   };
 
-  // Load progress from localStorage
+  // Fix the handleSubmitQuiz to calculate results immediately
+  const handleSubmitQuiz = () => {
+    const results = calculateDetailedResults();
+    setQuizState((prev) => ({
+      ...prev,
+      quizCompleted: true,
+      timeLeft: 0,
+      score: results.score,
+    }));
+  };
+
+  // Remove or fix the problematic useEffect
   useEffect(() => {
-    const savedProgress = localStorage.getItem("quizProgress");
-    const savedForm = localStorage.getItem("practiceForm");
-    const savedEssayAnswers = localStorage.getItem("essayAnswers");
-
-    if (savedProgress || savedForm || savedEssayAnswers) {
-      setTimeout(() => {
-        if (savedProgress) setQuizState(JSON.parse(savedProgress));
-        if (savedForm) setPracticeForm(JSON.parse(savedForm));
-        if (savedEssayAnswers) setEssayAnswers(JSON.parse(savedEssayAnswers));
-      }, 0);
+    if (quizState.quizCompleted) {
+      // This is now handled in handleSubmitQuiz
+      console.log("Quiz completed with score:", quizState.score);
     }
-  }, []);
+  }, [quizState.quizCompleted]);
 
-  // Cancel Confirmation Dialog
+  // --- RENDER FUNCTIONS ---
   const renderCancelConfirmation = () => {
     if (!showCancelConfirm) return null;
-
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl p-6 max-w-md mx-4">
@@ -525,7 +567,6 @@ const Practice = () => {
     );
   };
 
-  // Render quiz interface
   const renderQuiz = () => {
     if (!quizState.quizStarted || quizState.questions.length === 0) return null;
     if (quizState.quizCompleted) return renderResults();
@@ -537,7 +578,6 @@ const Practice = () => {
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6 relative">
-        {/* Cancel Button - Top Right */}
         <button
           onClick={confirmCancel}
           className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
@@ -592,7 +632,6 @@ const Practice = () => {
 
           <div className="space-y-3">
             {practiceForm.type === "essay" ? (
-              // Essay question input
               <div className="space-y-4">
                 <textarea
                   value={currentEssayAnswer}
@@ -620,7 +659,6 @@ const Practice = () => {
                 </div>
               </div>
             ) : (
-              // Multiple choice, true/false, or fill-in questions
               currentQuestion.options.map((option: string, index: number) => (
                 <label
                   key={index}
@@ -630,7 +668,7 @@ const Practice = () => {
                 >
                   <input
                     type="radio"
-                    name="quiz-answer"
+                    name={`quiz-answer-${quizState.currentQuestionIndex}`}
                     value={index}
                     checked={userAnswer === index}
                     onChange={() => handleAnswerSelect(index)}
@@ -674,10 +712,10 @@ const Practice = () => {
     );
   };
 
-  // Render results - IMPROVED VERSION
   const renderResults = () => {
-    const detailedResults = calculateDetailedResults();
-    const correctCount = detailedResults.correct;
+    // Calculate results directly instead of relying on state
+    const results = calculateDetailedResults();
+    const { correct: correctCount, incorrect, skipped, score } = results;
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -685,457 +723,304 @@ const Practice = () => {
           Quiz Results
         </h3>
 
-        {/* Score Overview */}
         <div className="text-center mb-8">
           <div className="text-4xl font-bold text-blue-600 mb-2">
-            {Math.round(quizState.score)}%
+            {Math.round(score)}%
           </div>
           <div className="text-lg text-gray-600">
             {correctCount} out of {quizState.questions.length} correct
           </div>
           <div
             className={`text-lg font-semibold mt-2 ${
-              quizState.score >= 80
+              score >= 80
                 ? "text-green-600"
-                : quizState.score >= 60
+                : score >= 60
                 ? "text-yellow-600"
                 : "text-red-600"
             }`}
           >
-            {quizState.score >= 80
+            {score >= 80
               ? "Excellent! 🎉"
-              : quizState.score >= 60
+              : score >= 60
               ? "Good Job! 👍"
               : "Keep Practicing! 💪"}
           </div>
         </div>
 
-        {/* Detailed Analytics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-green-700">
-              {detailedResults.correct}
+              {correctCount}
             </div>
             <div className="text-sm font-medium text-green-800">
               Correct Answers
             </div>
           </div>
           <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-red-700">
-              {detailedResults.incorrect}
-            </div>
+            <div className="text-2xl font-bold text-red-700">{incorrect}</div>
             <div className="text-sm font-medium text-red-800">
               Incorrect Answers
             </div>
           </div>
           <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-gray-700">
-              {detailedResults.skipped}
-            </div>
+            <div className="text-2xl font-bold text-gray-700">{skipped}</div>
             <div className="text-sm font-medium text-gray-800">
               Skipped Questions
             </div>
           </div>
         </div>
 
-        {/* Question Review - IMPROVED LAYOUT */}
-        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-          {quizState.questions.map((question, index) => {
-            const userAnswer = quizState.userAnswers[index];
-            const essayAnswer = essayAnswers[index];
-            let isCorrect = false;
-            let isSkipped = false;
-
-            if (practiceForm.type === "essay") {
-              isCorrect = !!(essayAnswer && essayAnswer.trim().length > 20);
-              isSkipped =
-                essayAnswer === undefined || essayAnswer.trim() === "";
-            } else {
-              isCorrect = userAnswer === question.correctAnswer;
-              isSkipped = userAnswer === undefined;
-            }
-
-            return (
-              <div
-                key={index}
-                className={`border-2 rounded-lg p-4 ${
-                  isCorrect
-                    ? "border-green-200 bg-green-50"
-                    : isSkipped
-                    ? "border-yellow-200 bg-yellow-50"
-                    : "border-red-200 bg-red-50"
-                }`}
-              >
-                {/* Question Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span
-                        className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
-                          isCorrect
-                            ? "bg-green-500 text-white"
-                            : isSkipped
-                            ? "bg-yellow-500 text-white"
-                            : "bg-red-500 text-white"
-                        }`}
-                      >
-                        {index + 1}
-                      </span>
-                      <span
-                        className={`text-sm font-medium px-2 py-1 rounded ${
-                          isCorrect
-                            ? "bg-green-100 text-green-800"
-                            : isSkipped
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {isCorrect
-                          ? "Completed"
-                          : isSkipped
-                          ? "Skipped"
-                          : "Insufficient"}
-                      </span>
-                    </div>
-                    <h4 className="font-semibold text-gray-900 text-lg">
-                      {question.question}
-                    </h4>
-                  </div>
-                </div>
-
-                {/* User's Answer for Essay */}
-                {practiceForm.type === "essay" && essayAnswer && (
-                  <div className="mb-3">
-                    <div className="text-sm font-medium text-gray-700 mb-1">
-                      Your Essay Response:
-                    </div>
-                    <div
-                      className={`p-3 rounded-lg border ${
-                        isCorrect
-                          ? "bg-green-100 border-green-300 text-green-800"
-                          : "bg-red-100 border-red-300 text-red-800"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        {isCorrect ? (
-                          <svg
-                            className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                        <div className="flex-1">
-                          <p className="whitespace-pre-wrap">{essayAnswer}</p>
-                          <div className="text-xs text-gray-500 mt-2">
-                            Character count: {essayAnswer.length}
-                            {!isCorrect && (
-                              <span className="text-red-500 ml-2">
-                                (Minimum 20 characters required)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* User's Answer for other question types */}
-                {practiceForm.type !== "essay" && !isSkipped && (
-                  <div className="mb-3">
-                    <div className="text-sm font-medium text-gray-700 mb-1">
-                      Your Answer:
-                    </div>
-                    <div
-                      className={`p-3 rounded-lg border ${
-                        isCorrect
-                          ? "bg-green-100 border-green-300 text-green-800"
-                          : "bg-red-100 border-red-300 text-red-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isCorrect ? (
-                          <svg
-                            className="w-5 h-5 text-green-600"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-5 h-5 text-red-600"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                        {question.options[userAnswer]}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Correct Answer for non-essay questions */}
-                {practiceForm.type !== "essay" && !isCorrect && (
-                  <div className="mb-3">
-                    <div className="text-sm font-medium text-gray-700 mb-1">
-                      Correct Answer:
-                    </div>
-                    <div className="p-3 rounded-lg bg-green-100 border border-green-300 text-green-800">
-                      <div className="flex items-center gap-2">
-                        <svg
-                          className="w-5 h-5 text-green-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {question.options[question.correctAnswer]}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Explanation */}
-                {question.explanation && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <svg
-                        className="w-4 h-4 text-blue-600"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <strong className="text-blue-800">Explanation:</strong>
-                    </div>
-                    <p className="text-blue-700 text-sm">
-                      {question.explanation}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="text-center mt-6">
+        <div className="flex justify-center mt-6">
           <Button
             onClick={restartQuiz}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Generate New Quiz
+            Start New Quiz
           </Button>
         </div>
       </div>
     );
   };
 
+  // --- MAIN RENDER ---
   return (
-    <div className="space-y-8">
-      {renderCancelConfirmation()}
+    <div className="p-4 md:p-8">
+      <h2 className="text-3xl font-bold mb-6 text-gray-900">
+        🧠 Practice Session Generator
+      </h2>
 
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Practice & Study
-        </h2>
-        <p className="text-gray-600">
-          Upload PDFs and generate custom practice quizzes
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column - PDF Upload */}
-        <div>
-          <PDFUpload
-            onPDFProcessed={handlePDFProcessed}
-            onLoadingChange={setPdfLoading}
-            userPreferences={{
-              numQuestions: practiceForm.numQuestions,
-              difficulty: practiceForm.difficulty,
-              type: practiceForm.type,
-            }}
-          />
+      {quizState.loading && (
+        <div className="text-lg text-blue-600 mb-4">
+          Generating quiz... This may take a moment for high-quality,
+          non-repetitive questions.
         </div>
+      )}
 
-        {/* Right Column - Manual Quiz Generator */}
-        <div className="space-y-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Generate Custom Quiz
-            </h3>
-            {quizState.error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                {quizState.error}
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Course/Subject
-                </label>
-                <input
-                  type="text"
-                  value={practiceForm.course}
-                  onChange={(e) =>
-                    handlePracticeFormChange("course", e.target.value)
-                  }
-                  placeholder="Enter course or subject"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Topic/Sub-topic
-                </label>
-                <input
-                  type="text"
-                  value={practiceForm.topic}
-                  onChange={(e) =>
-                    handlePracticeFormChange("topic", e.target.value)
-                  }
-                  placeholder="Enter topic or sub-topic"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Number of Questions
-                </label>
-                <select
-                  value={practiceForm.numQuestions}
-                  onChange={(e) =>
-                    handlePracticeFormChange("numQuestions", e.target.value)
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                >
-                  <option value="5">5 Questions</option>
-                  <option value="10">10 Questions</option>
-                  <option value="15">15 Questions</option>
-                  <option value="20">20 Questions</option>
-                  <option value="25">25 Questions</option>
-                  <option value="30">30 Questions</option>
-                  <option value="35">35 Questions</option>
-                  <option value="40">40 Questions</option>
-                  <option value="45">45 Questions</option>
-                  <option value="50">50 Questions</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Difficulty
-                </label>
-                <select
-                  value={practiceForm.difficulty}
-                  onChange={(e) =>
-                    handlePracticeFormChange("difficulty", e.target.value)
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                >
-                  <option value="easy">Easy (60s per question)</option>
-                  <option value="medium">Medium (40s per question)</option>
-                  <option value="hard">Hard (30s per question)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Question Type
-                </label>
-                <select
-                  value={practiceForm.type}
-                  onChange={(e) =>
-                    handlePracticeFormChange("type", e.target.value)
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                >
-                  <option value="multiple-choice">Multiple Choice</option>
-                  <option value="fill-in">Fill in the Blank</option>
-                  <option value="true-false">True/False</option>
-                  <option value="essay">Essay</option>
-                </select>
-              </div>
-            </div>
-            <Button
-              onClick={generateRandomQuiz}
-              disabled={quizState.loading || pdfLoading}
-              className="w-full font-medium"
+      {quizState.error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+          Error: {quizState.error}
+        </div>
+      )}
+
+      {quizState.quizStarted || quizState.loading ? (
+        renderQuiz()
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-md">
+          {/* Tab Navigation */}
+          <div className="flex border-b border-gray-200 mb-6">
+            <button
+              className={`px-4 py-2 font-medium ${
+                activeTab === "topic"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => setActiveTab("topic")}
             >
-              {quizState.loading
-                ? "Generating Questions..."
-                : "Generate Questions"}
-            </Button>
+              📝 By Topic
+            </button>
+            <button
+              className={`px-4 py-2 font-medium ${
+                activeTab === "pdf"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => setActiveTab("pdf")}
+            >
+              📚 From PDF Notes
+            </button>
+            <button
+              className={`px-4 py-2 font-medium ${
+                activeTab === "past-questions"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => setActiveTab("past-questions")}
+            >
+              🎯 From Past Questions
+            </button>
           </div>
 
-          {/* Recent Generated Quizzes */}
-          {!quizState.quizStarted && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Recent Quizzes
+          {/* Shared Quiz Settings */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <label className="block">
+              <span className="text-gray-700">Number of Questions</span>
+              <select
+                value={practiceForm.numQuestions}
+                onChange={(e) =>
+                  handlePracticeFormChange("numQuestions", e.target.value)
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
+              >
+                <option value="5">5 Questions</option>
+                <option value="10">10 Questions</option>
+                <option value="15">15 Questions</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-gray-700">Difficulty</span>
+              <select
+                value={practiceForm.difficulty}
+                onChange={(e) =>
+                  handlePracticeFormChange("difficulty", e.target.value)
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-gray-700">Question Type</span>
+              <select
+                value={practiceForm.type}
+                onChange={(e) =>
+                  handlePracticeFormChange(
+                    "type",
+                    e.target.value as PracticeForm["type"]
+                  )
+                }
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
+              >
+                <option value="multiple-choice">Multiple Choice</option>
+                <option value="true-false">True/False</option>
+                <option value="fill-in">Fill-in-the-Blank</option>
+                <option value="essay">Essay / Free Response</option>
+              </select>
+            </label>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === "topic" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                Generate Quiz by Topic
               </h3>
-              <div className="space-y-3">
-                {mockPracticeSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="flex items-center justify-between p-3 border border-gray-100 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {session.title}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {session.questions.length} Questions • Score:{" "}
-                        {session.score}/{session.total}
-                      </p>
-                    </div>
-                    <Button>View</Button>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <label className="block">
+                  <span className="text-gray-700">Course / Subject</span>
+                  <input
+                    type="text"
+                    value={practiceForm.course}
+                    onChange={(e) =>
+                      handlePracticeFormChange("course", e.target.value)
+                    }
+                    placeholder="e.g., Organic Chemistry"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-gray-700">Topic / Sub-topic</span>
+                  <input
+                    type="text"
+                    value={practiceForm.topic}
+                    onChange={(e) =>
+                      handlePracticeFormChange("topic", e.target.value)
+                    }
+                    placeholder="e.g., Alkanes Naming Conventions"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
+                  />
+                </label>
               </div>
+              <Button
+                onClick={generateRandomQuiz}
+                disabled={
+                  quizState.loading ||
+                  !practiceForm.topic ||
+                  !practiceForm.course
+                }
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {quizState.loading
+                  ? "Generating..."
+                  : "Generate Quiz from Topic"}
+              </Button>
+            </div>
+          )}
+
+          {activeTab === "pdf" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                Generate Quiz from PDF Notes
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                The AI will generate questions based *only* on the content of
+                your uploaded file.
+              </p>
+              <PDFUpload
+                onProcessed={handlePDFProcessed}
+                loading={pdfLoading}
+                setLoading={setPdfLoading}
+                formCriteria={practiceForm}
+              />
+            </div>
+          )}
+
+          {activeTab === "past-questions" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                Generate Quiz from Past Questions
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Upload past questions or paste them below. The AI will generate
+                new questions in the same style and format.
+              </p>
+
+              <div className="mb-4">
+                <label className="block mb-2">
+                  <span className="text-gray-700">
+                    Upload Past Questions File
+                  </span>
+                </label>
+                <input
+                  type="file"
+                  accept=".txt,.pdf,.doc,.docx"
+                  onChange={handlePastQuestionsFileUpload}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Supported formats: TXT, PDF, DOC, DOCX
+                </p>
+                {pastQuestionsFile && (
+                  <p className="text-sm text-green-600 mt-2">
+                    ✓ File selected: {pastQuestionsFile.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-6">
+                <label className="block mb-2">
+                  <span className="text-gray-700">Or Paste Past Questions</span>
+                </label>
+                <textarea
+                  value={pastQuestionsText}
+                  onChange={(e) => setPastQuestionsText(e.target.value)}
+                  placeholder="Paste your past questions here...&#10;Example:&#10;1. What is the derivative of x²?&#10;A) x&#10;B) 2x&#10;C) 2&#10;D) x²&#10;Answer: B&#10;&#10;2. Solve for x: 2x + 5 = 15&#10;A) 5&#10;B) 10&#10;C) 7.5&#10;D) 2.5&#10;Answer: A"
+                  rows={8}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black resize-vertical"
+                />
+              </div>
+
+              <Button
+                onClick={handlePastQuestionsProcessed}
+                disabled={
+                  quizState.loading ||
+                  (!pastQuestionsText && !pastQuestionsFile)
+                }
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {quizState.loading
+                  ? "Generating..."
+                  : "Generate Quiz from Past Questions"}
+              </Button>
             </div>
           )}
         </div>
-      </div>
-
-      {/* Quiz Interface */}
-      {renderQuiz()}
+      )}
+      {renderCancelConfirmation()}
     </div>
   );
 };
