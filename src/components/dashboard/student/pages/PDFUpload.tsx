@@ -2,11 +2,19 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 
+interface PracticeForm {
+  topic?: string;
+  course?: string;
+  numQuestions?: number;
+  difficulty?: string;
+  type?: string;
+}
+
 interface PDFUploadProps {
   onProcessed: (fileId: string, title: string) => void;
   loading: boolean;
   setLoading: (loading: boolean) => void;
-  formCriteria: any;
+  formCriteria: PracticeForm;
 }
 
 const PDFUpload = ({
