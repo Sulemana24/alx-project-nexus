@@ -1,9 +1,19 @@
 "use client";
 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  BookOpen,
+  Dumbbell,
+  GraduationCap,
+  BarChart3,
+  Settings as SettingsIcon,
+} from "lucide-react";
+
 interface SidebarItem {
   id: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
 interface SidebarProps {
@@ -20,13 +30,25 @@ const Sidebar = ({
   setIsSidebarOpen,
 }: SidebarProps) => {
   const sidebarItems: SidebarItem[] = [
-    { id: "dashboard", label: "Dashboard", icon: "📊" },
-    { id: "my-quizzes", label: "My Quizzes", icon: "📝" },
-    { id: "passco", label: "Passco", icon: "📚" },
-    { id: "practice", label: "Practice", icon: "💪" },
-    { id: "e-learning", label: "E-Learning", icon: "🎓" },
-    { id: "analytics", label: "Analytics", icon: "📈" },
-    { id: "settings", label: "Settings", icon: "⚙️" },
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: <LayoutDashboard size={20} />,
+    },
+    {
+      id: "my-quizzes",
+      label: "My Quizzes",
+      icon: <ClipboardList size={20} />,
+    },
+    { id: "passco", label: "Passco", icon: <BookOpen size={20} /> },
+    { id: "practice", label: "Practice", icon: <Dumbbell size={20} /> },
+    {
+      id: "e-learning",
+      label: "E-Learning",
+      icon: <GraduationCap size={20} />,
+    },
+    { id: "analytics", label: "Analytics", icon: <BarChart3 size={20} /> },
+    { id: "settings", label: "Settings", icon: <SettingsIcon size={20} /> },
   ];
 
   return (
@@ -50,7 +72,7 @@ const Sidebar = ({
                 <button
                   onClick={() => {
                     setActiveSidebarItem(item.id);
-                    setIsSidebarOpen(false); // Close sidebar on mobile after selection
+                    setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                     activeSidebarItem === item.id

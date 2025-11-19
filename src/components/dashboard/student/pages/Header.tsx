@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 interface HeaderProps {
   userName: string;
@@ -17,6 +18,8 @@ const Header = ({
   setIsSidebarOpen,
 }: HeaderProps) => {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+
+  const { logout } = useAuth();
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-40">
@@ -92,9 +95,14 @@ const Header = ({
                 </div>
                 <div className="border-t border-gray-100 mt-2 pt-2">
                   <button
-                    onClick={() => {
-                      localStorage.clear();
-                      window.location.href = "/auth";
+                    onClick={async () => {
+                      try {
+                        await logout();
+                        localStorage.clear();
+                        window.location.href = "/auth";
+                      } catch (err) {
+                        console.error("Logout failed:", err);
+                      }
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                   >

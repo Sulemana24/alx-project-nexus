@@ -1,6 +1,15 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
+} from "firebase/auth";
+import { auth, db } from "./firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 export interface User {
   id: string;
@@ -22,11 +31,6 @@ interface SignupData {
   institution?: string;
 }
 
-interface StoredUser extends SignupData {
-  id: string;
-  createdAt: string;
-}
-
 interface AuthContextType {
   user: User | null;
   login: (
@@ -35,7 +39,7 @@ interface AuthContextType {
     role: "student" | "teacher"
   ) => Promise<boolean>;
   signup: (userData: SignupData) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -45,95 +49,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Listen for Firebase auth changes
   useEffect(() => {
-    const storedUser = localStorage.getItem("learnify_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    const timer = setTimeout(() => setIsLoading(false), 0);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
 
-    return () => clearTimeout(timer);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+
+          setUser({
+            id: firebaseUser.uid,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: firebaseUser.email!,
+            role: data.role,
+            institution: data.institution,
+          });
+        }
+      } else {
+        setUser(null);
+      }
+
+      setIsLoading(false);
+    });
+
+    return unsubscribe;
   }, []);
 
+  // SIGNUP
+  const signup = async (userData: SignupData): Promise<boolean> => {
+    try {
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        userData.email,
+        userData.password
+      );
+
+      const userDoc = {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        role: userData.role,
+        institution: userData.institution || null,
+      };
+
+      await setDoc(doc(db, "users", cred.user.uid), userDoc);
+
+      // OPTIONAL: prevent auto-login
+      await signOut(auth);
+
+      return true;
+    } catch (err) {
+      console.error("Signup error:", err);
+      return false;
+    }
+  };
+
+  // LOGIN
   const login = async (
     email: string,
     password: string,
     role: "student" | "teacher"
   ): Promise<boolean> => {
-    setIsLoading(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+      const userDoc = await getDoc(doc(db, "users", cred.user.uid));
 
-    const users: StoredUser[] = JSON.parse(
-      localStorage.getItem("learnify_users") || "[]"
-    );
+      if (!userDoc.exists()) return false;
 
-    const foundUser = users.find(
-      (u) => u.email === email && u.password === password && u.role === role
-    );
+      const data = userDoc.data();
 
-    if (foundUser) {
-      const userData: User = {
-        id: foundUser.id,
-        firstName: foundUser.firstName,
-        lastName: foundUser.lastName,
-        email: foundUser.email,
-        role: foundUser.role,
-        institution: foundUser.institution,
-      };
+      // Ensure that the role matches
+      if (data.role !== role) {
+        return false;
+      }
 
-      setUser(userData);
-      localStorage.setItem("learnify_user", JSON.stringify(userData));
-      setIsLoading(false);
       return true;
-    }
-
-    setIsLoading(false);
-    return false;
-  };
-
-  const signup = async (userData: SignupData): Promise<boolean> => {
-    setIsLoading(true);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const users: StoredUser[] = JSON.parse(
-      localStorage.getItem("learnify_users") || "[]"
-    );
-
-    if (users.find((u) => u.email === userData.email)) {
-      setIsLoading(false);
+    } catch (err) {
+      console.error("Login error:", err);
       return false;
     }
-
-    const newUser: StoredUser = {
-      id: Date.now().toString(),
-      ...userData,
-      createdAt: new Date().toISOString(),
-    };
-
-    users.push(newUser);
-    localStorage.setItem("learnify_users", JSON.stringify(users));
-
-    const userWithoutPassword: User = {
-      id: newUser.id,
-      firstName: newUser.firstName,
-      lastName: newUser.lastName,
-      email: newUser.email,
-      role: newUser.role,
-      institution: newUser.institution,
-    };
-
-    setUser(userWithoutPassword);
-    localStorage.setItem("learnify_user", JSON.stringify(userWithoutPassword));
-    setIsLoading(false);
-    return true;
   };
 
-  const logout = () => {
+  // LOGOUT
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
-    localStorage.removeItem("learnify_user");
   };
 
   return (
@@ -145,6 +147,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
   return context;
 }
