@@ -300,7 +300,7 @@ const Practice = () => {
       // If file uploaded, read text
       if (pastQuestionsFile) {
         if (pastQuestionsFile.type === "application/pdf") {
-          pastQuestionsContent = "PDF content would be extracted here"; // TODO
+          pastQuestionsContent = "PDF content would be extracted here";
         } else {
           pastQuestionsContent = await readTextFile(pastQuestionsFile);
         }
@@ -854,6 +854,23 @@ const Practice = () => {
                 <option value="5">5 Questions</option>
                 <option value="10">10 Questions</option>
                 <option value="15">15 Questions</option>
+                <option value="20">20 Questions</option>
+                <option value="25">25 Questions</option>
+                <option value="30">30 Questions</option>
+                <option value="35">35 Questions</option>
+                <option value="40">40 Questions</option>
+                <option value="45">45 Questions</option>
+                <option value="50">50 Questions</option>
+                <option value="55">55 Questions</option>
+                <option value="60">60 Questions</option>
+                <option value="65">65 Questions</option>
+                <option value="70">70 Questions</option>
+                <option value="75">75 Questions</option>
+                <option value="80">80 Questions</option>
+                <option value="85">85 Questions</option>
+                <option value="90">90 Questions</option>
+                <option value="95">95 Questions</option>
+                <option value="100">100 Questions</option>
               </select>
             </label>
 
