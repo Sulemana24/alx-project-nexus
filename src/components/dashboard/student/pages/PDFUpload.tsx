@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 interface PracticeForm {
   topic?: string;
   course?: string;
-  numQuestions?: number;
+  numQuestions?: string;
   difficulty?: string;
   type?: string;
 }
@@ -103,9 +103,14 @@ const PDFUpload = ({
 
       // Call the processing callback
       onProcessed(data.fileId, quizTopic);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("PDF upload error:", err);
-      setError(err.message || "Failed to upload PDF");
+
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to upload PDF");
+      }
     } finally {
       setLoading(false);
       setUploadProgress(0);
