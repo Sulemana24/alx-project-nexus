@@ -61,7 +61,7 @@ const Sidebar = ({
       )}
 
       <aside
-        className={`bg-white shadow-sm border-r border-gray-200 fixed top-0 left-0 h-full z-30 transform transition-transform duration-300
+        className={`bg-white shadow-sm border-r border-gray-200 fixed top-0 left-0 h-full z-30 transform transition-transform duration-300 mt-2 md:mt-8
           ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:relative lg:w-64`}
       >
