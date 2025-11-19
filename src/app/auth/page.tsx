@@ -16,10 +16,11 @@ export default function AuthPage() {
     "student"
   );
   const [authError, setAuthError] = useState<string>("");
-  const { user, login, signup, isLoading } = useAuth();
+
+  const { user, login, logout, signup, isLoading } = useAuth();
   const router = useRouter();
 
-  // Redirect if user is already logged in
+  // Redirect if already logged in
   useEffect(() => {
     if (user && !isLoading) {
       router.push(
@@ -32,7 +33,6 @@ export default function AuthPage() {
   useEffect(() => {
     const header = document.querySelector("header");
     const footer = document.querySelector("footer");
-
     if (header) header.style.display = "none";
     if (footer) footer.style.display = "none";
 
@@ -42,50 +42,68 @@ export default function AuthPage() {
     };
   }, []);
 
+  // Role selection
   const handleRoleSelect = (role: "student" | "teacher") => {
     setSelectedRole(role);
     setCurrentView("signup");
     setAuthError("");
   };
 
+  // Switch views
   const handleSwitchToLogin = () => {
     setCurrentView("login");
     setAuthError("");
   };
-
   const handleSwitchToSignup = () => {
     setCurrentView("signup");
     setAuthError("");
   };
-
   const handleSwitchToSelection = () => {
     setCurrentView("selection");
     setAuthError("");
   };
 
+  // LOGIN
   const handleLogin = async (
     email: string,
     password: string,
     role: "student" | "teacher"
   ) => {
     setAuthError("");
-    const success = await login(email, password, role);
-
-    if (success) {
-      // Navigation will be handled by the useEffect above
-    } else {
-      setAuthError("Invalid email, password, or role selection");
+    try {
+      const success = await login(email, password, role);
+      if (!success) {
+        setAuthError("Invalid email, password, or role selection");
+      }
+      // else, onAuthStateChanged will redirect
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setAuthError(err.message);
+      } else {
+        setAuthError("Login failed");
+      }
     }
   };
 
+  // SIGNUP
   const handleSignup = async (data: SignupData) => {
     setAuthError("");
-    const success = await signup(data);
+    try {
+      const success = await signup(data);
 
-    if (success) {
-      // Navigation will be handled by the useEffect above
-    } else {
-      setAuthError("Email already exists or signup failed");
+      if (success) {
+        // Immediately sign out after signup to prevent auto-login
+        await logout(); // you need to destructure logout from useAuth
+        setCurrentView("selection"); // go back to selection page for fresh start
+      } else {
+        setAuthError("Email already exists or signup failed");
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setAuthError(err.message);
+      } else {
+        setAuthError("Signup failed");
+      }
     }
   };
 

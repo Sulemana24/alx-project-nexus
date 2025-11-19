@@ -31,10 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!process.env.GOOGLE_API_KEY) {
-      return NextResponse.json(
-        { error: "Google API key not configured" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "AI not configured" }, { status: 500 });
     }
 
     return await generateWithGemini(
@@ -169,13 +166,13 @@ async function generateWithGemini(
 
     if (!response.ok) {
       const err = await response.json();
-      throw new Error(err.error?.message || "Gemini API Error");
+      throw new Error(err.error?.message || "AI Error");
     }
 
     const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!rawText) throw new Error("Empty content returned from Gemini");
+    if (!rawText) throw new Error("Empty content returned from AI");
 
     const questions = processGeminiResponse(rawText);
 
@@ -184,7 +181,7 @@ async function generateWithGemini(
     return NextResponse.json(validQuestions);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown Gemini error";
-    console.error("Gemini generation failed:", message);
+    console.error("AI generation failed:", message);
     throw new Error(message);
   }
 }

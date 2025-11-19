@@ -166,7 +166,7 @@ const Practice = () => {
       setQuizState((prev) => ({
         ...prev,
         loading: false,
-        error: "PDF quiz generation failed: " + message, // ✅ use message
+        error: "PDF quiz generation failed: " + message,
       }));
     }
   };
@@ -186,7 +186,7 @@ const Practice = () => {
         body: JSON.stringify({
           ...practiceForm,
           fileId,
-          topic: practiceForm.topic || "General", // Ensure topic is always provided
+          topic: practiceForm.topic || "General",
         }),
       });
 
@@ -422,10 +422,6 @@ const Practice = () => {
     }
   };
 
-  /*   const handleSubmitQuiz = () => {
-    setQuizState((prev) => ({ ...prev, quizCompleted: true, timeLeft: 0 }));
-  };
- */
   const restartQuiz = () => {
     setQuizState({
       questions: [],
