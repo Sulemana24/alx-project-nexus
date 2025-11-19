@@ -10,11 +10,11 @@ export default function AdminDashboardPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
+  /* useEffect(() => {
     if (!isLoading && (!user || user?.role !== "admin")) {
       router.push("/auth");
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router]); */
 
   if (isLoading) {
     return (
