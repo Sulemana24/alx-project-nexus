@@ -34,11 +34,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   // 🔵 Password visibility state
   const [showPassword, setShowPassword] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
+
   const togglePassword = () => setShowPassword((p) => !p);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(formData.email, formData.password, formData.role);
+
+    // Validate inputs before submitting
+    if (!formData.email || !formData.password) {
+      return; // Let the browser handle required field validation
+    }
+
+    setLocalLoading(true);
+
+    try {
+      await onLogin(formData.email, formData.password, formData.role);
+    } catch (err) {
+      console.error("Login error:", err);
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
   const handleChange = (
@@ -51,6 +67,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
   };
+
+  const isActuallyLoading = isLoading || localLoading;
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
@@ -79,27 +97,48 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
           <div className="mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-              Welcome back
+              {isActuallyLoading ? "Signing you in..." : "Welcome back"}
             </h2>
             <p className="text-gray-500 text-sm">
-              Sign in to continue your learning journey
+              {isActuallyLoading
+                ? "Please wait while we authenticate..."
+                : "Sign in to continue your learning journey"}
             </p>
           </div>
         </div>
 
         {/* Form Card */}
-        <Card className="shadow-xl border-0 rounded-2xl backdrop-blur-sm bg-white/70">
+        <Card
+          className={`shadow-xl border-0 rounded-2xl backdrop-blur-sm bg-white/70 transition-all duration-300 ${
+            isActuallyLoading ? "opacity-90 scale-[0.995]" : ""
+          }`}
+        >
           <CardContent className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Error Message */}
+              {/* Error Message - Using the existing error prop */}
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-                  {error}
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm animate-pulse">
+                  🔴 {error}
+                </div>
+              )}
+
+              {/* Loading Overlay */}
+              {isActuallyLoading && (
+                <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center z-10 backdrop-blur-sm">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium">
+                      Authenticating...
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Checking credentials
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Role Selection */}
-              <div>
+              <div className={isActuallyLoading ? "opacity-50" : ""}>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   I am a
                 </label>
@@ -113,8 +152,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                       formData.role === "student"
                         ? "border-blue-500 bg-blue-50 text-blue-600 shadow-md"
                         : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:shadow-sm"
-                    }`}
-                    disabled={isLoading}
+                    } ${isActuallyLoading ? "cursor-not-allowed" : ""}`}
+                    disabled={isActuallyLoading}
                   >
                     <div className="text-xl mb-2">🎓</div>
                     <div className="text-sm font-semibold">Student</div>
@@ -129,8 +168,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                       formData.role === "teacher"
                         ? "border-blue-500 bg-blue-50 text-blue-600 shadow-md"
                         : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:shadow-sm"
-                    }`}
-                    disabled={isLoading}
+                    } ${isActuallyLoading ? "cursor-not-allowed" : ""}`}
+                    disabled={isActuallyLoading}
                   >
                     <div className="text-xl mb-2">👨‍🏫</div>
                     <div className="text-sm font-semibold">Teacher</div>
@@ -139,35 +178,39 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               </div>
 
               {/* Email */}
-              <Input
-                label="Email Address"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                placeholder="Enter your email"
-                className="rounded-lg text-black border-gray-200 focus:border-blue-500 focus:ring-blue-500 transition-all duration-200"
-                disabled={isLoading}
-                icon={
-                  <svg
-                    className="w-5 h-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
-                    />
-                  </svg>
-                }
-              />
+              <div className={isActuallyLoading ? "opacity-50" : ""}>
+                <Input
+                  label="Email Address"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  placeholder="Enter your email"
+                  className="rounded-lg text-black border-gray-200 focus:border-blue-500 focus:ring-blue-500 transition-all duration-200"
+                  disabled={isActuallyLoading}
+                  icon={
+                    <svg
+                      className="w-5 h-5 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
+                      />
+                    </svg>
+                  }
+                />
+              </div>
 
               {/* Password (with toggle added) */}
-              <div className="relative">
+              <div
+                className={`relative ${isActuallyLoading ? "opacity-50" : ""}`}
+              >
                 <Input
                   label="Password"
                   name="password"
@@ -177,7 +220,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   required
                   placeholder="Enter your password"
                   className="rounded-lg text-black border-gray-200 focus:border-blue-500 focus:ring-blue-500 transition-all duration-200"
-                  disabled={isLoading}
+                  disabled={isActuallyLoading}
                   icon={
                     <svg
                       className="w-5 h-5 text-gray-400"
@@ -199,8 +242,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                 <button
                   type="button"
                   onClick={togglePassword}
-                  className="absolute right-3 top-[42px] text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-[42px] text-gray-400 hover:text-gray-600 transition-colors duration-200"
                   tabIndex={-1}
+                  disabled={isActuallyLoading}
                 >
                   {showPassword ? (
                     // Eye Open
@@ -243,7 +287,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               </div>
 
               {/* Remember Me */}
-              <div className="flex items-center justify-between">
+              <div
+                className={`flex items-center justify-between ${
+                  isActuallyLoading ? "opacity-50" : ""
+                }`}
+              >
                 <label className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -251,7 +299,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                     checked={formData.rememberMe}
                     onChange={handleChange}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    disabled={isLoading}
+                    disabled={isActuallyLoading}
                   />
                   <span className="text-sm text-gray-700 font-medium">
                     Remember me
@@ -270,24 +318,49 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               <Button
                 type="submit"
                 size="lg"
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
-                isLoading={isLoading}
-                disabled={isLoading}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 relative overflow-hidden"
+                isLoading={isActuallyLoading}
+                disabled={isActuallyLoading}
               >
-                {isLoading ? "Signing In..." : "Sign In to Your Account"}
+                {isActuallyLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Authenticating...
+                  </span>
+                ) : (
+                  "Sign In to Your Account"
+                )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
         {/* Switch */}
-        <div className="text-center">
+        <div className={`text-center ${isActuallyLoading ? "opacity-50" : ""}`}>
           <p className="text-gray-600">
             Don&apos;t have an account?{" "}
             <button
               onClick={onSwitchToSignup}
               className="text-blue-500 hover:text-blue-600 font-semibold hover:underline transition-colors duration-200"
-              disabled={isLoading}
+              disabled={isActuallyLoading}
             >
               Create an account
             </button>

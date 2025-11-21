@@ -105,10 +105,7 @@ const Dashboard = ({ userName, setActiveSidebarItem }: DashboardProps) => {
           {mockQuizzes
             .filter((quiz) => quiz.isActive)
             .map((quiz) => (
-              <div
-                key={quiz.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-              >
+              <div key={quiz.id} className="p-4">
                 <div className="flex justify-between items-start mb-3">
                   <span className="font-bold text-gray-900">
                     {quiz.accessCode}

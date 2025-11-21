@@ -22,10 +22,18 @@ export default function AuthPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user && !isLoading) {
-      router.push(
-        user.role === "student" ? "/dashboard/student" : "/dashboard/teacher"
-      );
+    if (!isLoading && user) {
+      switch (user.role) {
+        case "student":
+          router.push("/dashboard/student");
+          break;
+        case "teacher":
+          router.push("/dashboard/teacher");
+          break;
+        case "admin":
+          router.push("/dashboard/admin");
+          break;
+      }
     }
   }, [user, isLoading, router]);
 
@@ -89,14 +97,20 @@ export default function AuthPage() {
   const handleSignup = async (data: SignupData) => {
     setAuthError("");
     try {
-      const success = await signup(data);
+      const result = await signup(data); // returns { success: boolean, message: string }
 
-      if (success) {
-        // Immediately sign out after signup to prevent auto-login
-        await logout(); // you need to destructure logout from useAuth
-        setCurrentView("selection"); // go back to selection page for fresh start
+      if (result.success) {
+        // ✅ Show success message
+        alert(result.message); // or use toast.success(result.message)
+
+        // ✅ Redirect based on role
+        if (data.role === "student") {
+          router.push("/dashboard/student");
+        } else if (data.role === "teacher") {
+          router.push("/dashboard/teacher");
+        }
       } else {
-        setAuthError("Email already exists or signup failed");
+        setAuthError(result.message || "Signup failed");
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
