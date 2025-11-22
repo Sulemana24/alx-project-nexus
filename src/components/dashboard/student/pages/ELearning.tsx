@@ -1,26 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { mockVideos } from "@/data/mock-data";
 import { useYouTubeSearch } from "@/hooks/useYouTubeSearch";
 import { VideoResource, getYouTubeVideoId } from "@/lib/youtube-api";
 import { Button } from "@/components/ui/Button";
+import { auth } from "@/lib/firebase";
+import {
+  saveRecentVideo,
+  getRecentVideos,
+  deleteRecentVideo,
+  FirestoreRecentVideo,
+  RecentVideoDoc,
+} from "@/lib/recentVideos";
+
+// Extend VideoResource with optional Firestore fields
+type VideoWithOptionalFields = VideoResource & {
+  thumbnail?: string;
+  description?: string;
+  createdBy?: string;
+  youtubeUrl?: string;
+  url?: string;
+  completedAt?: number;
+};
 
 const ELearning = () => {
-  // State
-  const [selectedVideo, setSelectedVideo] = useState<VideoResource | null>(
-    null
-  );
+  const [selectedVideo, setSelectedVideo] =
+    useState<VideoWithOptionalFields | null>(null);
   const [videoProgress, setVideoProgress] = useState<Record<string, number>>(
     {}
   );
+  const [recentVideos, setRecentVideos] = useState<VideoWithOptionalFields[]>(
+    []
+  );
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loadingRecent, setLoadingRecent] = useState(false);
 
   const { searchQuery, setSearchQuery, searchResults, isLoading, error } =
     useYouTubeSearch();
 
   // Combine mock videos and search results
-  const getAllVideos = (): VideoResource[] => {
+  const getAllVideos = (): VideoWithOptionalFields[] => {
     const allVideos = [...mockVideos];
     searchResults.forEach((video) => {
       if (!allVideos.find((v) => v.id === video.id)) {
@@ -30,7 +52,8 @@ const ELearning = () => {
     return allVideos;
   };
 
-  const getRecentlyAccessedVideos = (): VideoResource[] => {
+  const getRecentlyAccessedVideosLocal = (): VideoWithOptionalFields[] => {
+    if (recentVideos.length > 0) return recentVideos;
     return getAllVideos()
       .filter((video) => videoProgress[video.id] > 0)
       .sort((a, b) => (videoProgress[b.id] || 0) - (videoProgress[a.id] || 0));
@@ -39,11 +62,107 @@ const ELearning = () => {
   const getFallbackThumbnail = () =>
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%23f3f4f6'/%3E%3Cpath d='M160 90l40 30-40 30z' fill='%236b7280'/%3E%3C/svg%3E";
 
-  const getVideoThumbnail = (video: VideoResource) =>
+  const getVideoThumbnail = (video: VideoWithOptionalFields) =>
     video.thumbnail || getFallbackThumbnail();
 
   const updateVideoProgress = (videoId: string, progress: number) => {
     setVideoProgress((prev) => ({ ...prev, [videoId]: progress }));
+  };
+
+  // --- Auth listener + load recent videos ---
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user: User | null) => {
+      if (user) {
+        setUserId(user.uid);
+        loadRecent(user.uid);
+      } else {
+        setUserId(null);
+        setRecentVideos([]);
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  const recentCount = getRecentlyAccessedVideosLocal().length;
+
+  async function loadRecent(uid: string) {
+    setLoadingRecent(true);
+    try {
+      const docs: RecentVideoDoc[] = await getRecentVideos(uid, 10);
+
+      // Map Firestore recent videos to state type
+      const formattedDocs: VideoWithOptionalFields[] = docs.map((d) => ({
+        id: d.id,
+        title: d.title,
+        description: d.description || "",
+        thumbnail: d.thumbnail || "",
+        createdBy: d.createdBy || "",
+        youtubeUrl: d.youtubeUrl,
+        completedAt: d.completedAt ?? 0,
+        duration: String(d.duration ?? ""), // keep as string
+        category: d.category || "",
+        views: d.views ?? 0,
+        uploadDate:
+          d.uploadDate instanceof Date
+            ? d.uploadDate
+            : d.uploadDate
+            ? new Date(d.uploadDate)
+            : new Date(), // fallback to now
+      }));
+
+      setRecentVideos(formattedDocs);
+
+      // update local progress map
+      const progressMap: Record<string, number> = {};
+      formattedDocs.forEach((d) => {
+        if (d.id) progressMap[d.id] = 100;
+      });
+      setVideoProgress((prev) => ({ ...prev, ...progressMap }));
+    } catch (err) {
+      console.error("Failed to load recent videos", err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  }
+
+  const handleMarkCompleted = async (video: VideoWithOptionalFields) => {
+    updateVideoProgress(video.id, 100);
+    setSelectedVideo((prev) =>
+      prev ? { ...prev, completedAt: Date.now() } : prev
+    );
+
+    if (!userId) return;
+
+    try {
+      const recentVideo: FirestoreRecentVideo = {
+        id: video.id,
+        title: video.title,
+        description: video.description || "",
+        thumbnail: video.thumbnail || "",
+        createdBy: video.createdBy || "",
+        youtubeUrl: video.youtubeUrl || video.url || "",
+      };
+      await saveRecentVideo(userId, recentVideo);
+      await loadRecent(userId);
+    } catch (err) {
+      console.error("Failed to save recent video", err);
+    }
+  };
+
+  const handleDeleteRecent = async (videoId: string) => {
+    if (!userId) return;
+    try {
+      await deleteRecentVideo(userId, videoId);
+      setRecentVideos((prev) => prev.filter((v) => v.id !== videoId));
+      setVideoProgress((prev) => {
+        const copy = { ...prev };
+        delete copy[videoId];
+        return copy;
+      });
+    } catch (err) {
+      console.error("Failed to delete recent video", err);
+    }
   };
 
   return (
@@ -57,7 +176,7 @@ const ELearning = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="p-2">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <input
             type="text"
@@ -83,14 +202,14 @@ const ELearning = () => {
 
       {/* Video Player */}
       {selectedVideo && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className="p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Now Playing: {selectedVideo.title}
           </h3>
           <div className="bg-black rounded-lg overflow-hidden">
             <iframe
               src={`https://www.youtube.com/embed/${getYouTubeVideoId(
-                selectedVideo.youtubeUrl
+                selectedVideo.youtubeUrl || selectedVideo.url || ""
               )}?autoplay=1`}
               className="w-full h-64 md:h-96"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -105,14 +224,9 @@ const ELearning = () => {
               Close Player
             </Button>
             <Button
-              onClick={() => {
-                if (!selectedVideo) return;
-
-                updateVideoProgress(selectedVideo.id, 100);
-                setSelectedVideo((prev) =>
-                  prev ? { ...prev, progress: 100 } : prev
-                );
-              }}
+              onClick={() =>
+                selectedVideo && handleMarkCompleted(selectedVideo)
+              }
               className="bg-green-500 hover:bg-green-600 text-white"
             >
               Mark as Completed
@@ -123,7 +237,7 @@ const ELearning = () => {
 
       {/* Search Results */}
       {searchQuery && searchResults.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Search Results for &quot;{searchQuery}&quot;
           </h3>
@@ -173,16 +287,22 @@ const ELearning = () => {
       )}
 
       {/* Recently Accessed Videos */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-gray-900">
             Recently Accessed Videos
           </h3>
+
           <span className="text-sm text-gray-500">
-            {getRecentlyAccessedVideos().length} videos
+            {recentCount} {recentCount === 1 ? "Video" : "Videos"}
           </span>
         </div>
-        {getRecentlyAccessedVideos().length === 0 ? (
+
+        {loadingRecent ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+          </div>
+        ) : getRecentlyAccessedVideosLocal().length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600">
               Start watching videos to see them here
@@ -190,7 +310,7 @@ const ELearning = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {getRecentlyAccessedVideos().map((video) => (
+            {getRecentlyAccessedVideosLocal().map((video) => (
               <div
                 key={video.id}
                 className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
@@ -226,18 +346,29 @@ const ELearning = () => {
                         : "In Progress"}
                     </span>
                   </div>
-                  <button
-                    onClick={() => setSelectedVideo(video)}
-                    className={`w-full py-2 rounded-lg text-white ${
-                      videoProgress[video.id] === 100
-                        ? "bg-green-500 hover:bg-green-600"
-                        : "bg-blue-500 hover:bg-blue-600"
-                    }`}
-                  >
-                    {videoProgress[video.id] === 100
-                      ? "Watch Again"
-                      : "Continue Watching"}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedVideo(video)}
+                      className={`flex-1 py-2 rounded-lg text-white ${
+                        videoProgress[video.id] === 100
+                          ? "bg-green-500 hover:bg-green-600"
+                          : "bg-blue-500 hover:bg-blue-600"
+                      }`}
+                    >
+                      {videoProgress[video.id] === 100
+                        ? "Watch Again"
+                        : "Continue Watching"}
+                    </button>
+
+                    {/* Delete button */}
+                    <button
+                      onClick={() => handleDeleteRecent(video.id)}
+                      className="w-12 flex-none rounded-lg bg-red-500 hover:bg-red-600 text-white"
+                      title="Remove from recent"
+                    >
+                      Del
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

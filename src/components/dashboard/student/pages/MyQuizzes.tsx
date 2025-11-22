@@ -302,10 +302,7 @@ const MyQuizzes = () => {
             </h3>
             <div className="space-y-4">
               {mockQuizAttempts.map((attempt) => (
-                <div
-                  key={attempt.id}
-                  className="p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                >
+                <div key={attempt.id} className="p-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between space-y-2 md:space-y-0">
                     <div className="space-y-1">
                       <p className="font-medium text-gray-900">

@@ -2,6 +2,12 @@
 import { Button } from "@/components/ui/Button";
 import { useState, useEffect } from "react";
 import PDFUpload from "@/components/dashboard/student/pages/PDFUpload";
+import { useAuth } from "@/lib/auth-context";
+import {
+  saveQuizAttempt,
+  FirestoreQuizAttempt,
+  getQuizHistory,
+} from "@/lib/practiceHistory";
 
 // --- INTERFACES ---
 interface GeminiQuestionOutput {
@@ -46,6 +52,8 @@ const Practice = () => {
     type: "multiple-choice",
   });
 
+  const { user } = useAuth();
+
   const [quizState, setQuizState] = useState<QuizState>({
     questions: [],
     currentQuestionIndex: 0,
@@ -58,17 +66,29 @@ const Practice = () => {
     error: "",
   });
 
+  const [practiceHistory, setPracticeHistory] = useState<
+    FirestoreQuizAttempt[]
+  >([]);
+
   const [pdfFileId, setPdfFileId] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [essayAnswers, setEssayAnswers] = useState<Record<number, string>>({});
 
-  // NEW: Past Questions State
   const [pastQuestionsText, setPastQuestionsText] = useState<string>("");
   const [pastQuestionsFile, setPastQuestionsFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<
     "topic" | "pdf" | "past-questions"
   >("topic");
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!user?.id) return;
+      const history = await getQuizHistory(user.id, 5);
+      setPracticeHistory(history);
+    };
+    fetchHistory();
+  }, [user, quizState.quizCompleted]);
 
   // --- HELPER FUNCTIONS ---
   const mapGeminiQuestions = (
@@ -89,19 +109,10 @@ const Practice = () => {
   };
 
   const getTimePerQuestion = () => {
-    switch (practiceForm.difficulty) {
-      case "easy":
-        return 60;
-      case "medium":
-        return 40;
-      case "hard":
-        return 30;
-      default:
-        return 40;
-    }
+    return 30; // 30 seconds per question for all difficulties
   };
 
-  // --- QUIZ GENERATION BY TOPIC ---
+  // --- QUIZ GENERATION ---
   const generateRandomQuiz = async () => {
     if (!practiceForm.topic || !practiceForm.course) {
       setQuizState((prev) => ({
@@ -123,9 +134,7 @@ const Practice = () => {
     try {
       const response = await fetch("/api/generate-quiz", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(practiceForm),
       });
 
@@ -147,26 +156,30 @@ const Practice = () => {
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
 
+      const totalQuizTime =
+        getTimePerQuestion() * Number(practiceForm.numQuestions);
+
       setQuizState((prev) => ({
         ...prev,
         questions: newQuestions,
         quizStarted: true,
         currentQuestionIndex: 0,
         userAnswers: {},
-        timeLeft: getTimePerQuestion(),
+        timeLeft: totalQuizTime,
         quizCompleted: false,
         score: 0,
         loading: false,
       }));
+
       setEssayAnswers({});
       setPdfFileId(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error("PDF Quiz Generation Error:", message);
+      console.error("Quiz Generation Error:", message);
       setQuizState((prev) => ({
         ...prev,
         loading: false,
-        error: "PDF quiz generation failed: " + message,
+        error: "Quiz generation failed: " + message,
       }));
     }
   };
@@ -178,8 +191,6 @@ const Practice = () => {
     setPdfFileId(fileId);
 
     try {
-      console.log("Processing PDF with fileId:", fileId, "title:", title);
-
       const response = await fetch("/api/generate-quiz-from-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,11 +201,8 @@ const Practice = () => {
         }),
       });
 
-      console.log("PDF API response status:", response.status);
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("PDF API error details:", errorData);
         throw new Error(
           errorData.error ||
             `Failed to generate quiz from PDF. Status: ${response.status}`
@@ -202,25 +210,19 @@ const Practice = () => {
       }
 
       const responseData = await response.json();
-      console.log("PDF API response data:", responseData);
 
-      // Handle different response formats
       let geminiQuizData: GeminiQuestionOutput[];
 
       if (Array.isArray(responseData)) {
-        // Direct array response
         geminiQuizData = responseData;
       } else if (
         responseData.questions &&
         Array.isArray(responseData.questions)
       ) {
-        // Nested questions array
         geminiQuizData = responseData.questions;
       } else if (responseData.quiz && Array.isArray(responseData.quiz)) {
-        // Nested quiz array
         geminiQuizData = responseData.quiz;
       } else {
-        // Try to find any array in the response
         const arrayKeys = Object.keys(responseData).filter((key) =>
           Array.isArray(responseData[key])
         );
@@ -231,8 +233,6 @@ const Practice = () => {
         }
       }
 
-      console.log("Processed quiz data:", geminiQuizData);
-
       if (!geminiQuizData || geminiQuizData.length === 0) {
         throw new Error(
           "No questions were generated from the PDF. Please try a different PDF or topic."
@@ -241,30 +241,28 @@ const Practice = () => {
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
 
+      const totalQuizTime =
+        getTimePerQuestion() * Number(practiceForm.numQuestions);
+
       setQuizState((prev) => ({
         ...prev,
         questions: newQuestions,
         quizStarted: true,
         currentQuestionIndex: 0,
         userAnswers: {},
-        timeLeft: getTimePerQuestion(),
+        timeLeft: totalQuizTime,
         quizCompleted: false,
         score: 0,
         loading: false,
       }));
 
-      // Update the form with PDF context
       setPracticeForm((prev) => ({
         ...prev,
         course: "PDF Analysis",
         topic: title || "PDF Content",
       }));
 
-      console.log(
-        "✅ PDF quiz successfully loaded with",
-        newQuestions.length,
-        "questions"
-      );
+      setEssayAnswers({});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("PDF Quiz Generation Error:", message);
@@ -297,7 +295,6 @@ const Practice = () => {
     try {
       let pastQuestionsContent = pastQuestionsText;
 
-      // If file uploaded, read text
       if (pastQuestionsFile) {
         if (pastQuestionsFile.type === "application/pdf") {
           pastQuestionsContent = "PDF content would be extracted here";
@@ -337,17 +334,22 @@ const Practice = () => {
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
 
+      const totalQuizTime =
+        getTimePerQuestion() * Number(practiceForm.numQuestions);
+
       setQuizState((prev) => ({
         ...prev,
         questions: newQuestions,
         quizStarted: true,
         currentQuestionIndex: 0,
         userAnswers: {},
-        timeLeft: getTimePerQuestion(),
+        timeLeft: totalQuizTime,
         quizCompleted: false,
         score: 0,
         loading: false,
       }));
+
+      setEssayAnswers({});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Past Questions Quiz Generation Error:", message);
@@ -362,7 +364,6 @@ const Practice = () => {
     }
   };
 
-  // Helper function to read text file
   const readTextFile = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -372,14 +373,11 @@ const Practice = () => {
     });
   };
 
-  // Handle file upload for past questions
   const handlePastQuestionsFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setPastQuestionsFile(file);
-    }
+    if (file) setPastQuestionsFile(file);
   };
 
   // --- QUIZ NAVIGATION ---
@@ -407,7 +405,6 @@ const Practice = () => {
       setQuizState((prev) => ({
         ...prev,
         currentQuestionIndex: prev.currentQuestionIndex + 1,
-        timeLeft: getTimePerQuestion(),
       }));
     }
   };
@@ -417,7 +414,6 @@ const Practice = () => {
       setQuizState((prev) => ({
         ...prev,
         currentQuestionIndex: prev.currentQuestionIndex - 1,
-        timeLeft: getTimePerQuestion(),
       }));
     }
   };
@@ -442,24 +438,35 @@ const Practice = () => {
 
   // --- TIMER ---
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (
-      quizState.quizStarted &&
-      !quizState.quizCompleted &&
-      quizState.timeLeft > 0
-    ) {
-      timer = setTimeout(() => {
-        setQuizState((prev) => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
-      }, 1000);
-    } else if (
-      quizState.timeLeft === 0 &&
-      quizState.quizStarted &&
-      !quizState.quizCompleted
-    ) {
-      handleNextQuestion();
-    }
-    return () => clearTimeout(timer);
-  }, [quizState.quizStarted, quizState.quizCompleted, quizState.timeLeft]);
+    if (!quizState.quizStarted || quizState.quizCompleted) return;
+
+    const timer = setInterval(() => {
+      setQuizState((prev) => {
+        if (prev.timeLeft <= 1) {
+          clearInterval(timer);
+          // Directly calculate results here to avoid dependency issues
+          const correct = prev.questions.reduce((acc, q, idx) => {
+            const answer = prev.userAnswers[idx];
+            return acc + (answer === q.correctAnswer ? 1 : 0);
+          }, 0);
+          return {
+            ...prev,
+            quizCompleted: true,
+            timeLeft: 0,
+            score: (correct / prev.questions.length) * 100,
+          };
+        }
+        return { ...prev, timeLeft: prev.timeLeft - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    quizState.quizStarted,
+    quizState.quizCompleted,
+    quizState.questions,
+    quizState.userAnswers,
+  ]);
 
   // --- CANCEL CONFIRMATION ---
   const cancelQuiz = () => {
@@ -483,7 +490,7 @@ const Practice = () => {
 
   const confirmCancel = () => setShowCancelConfirm(true);
 
-  // --- RESULTS CALCULATION ---
+  // --- RESULTS ---
   const calculateDetailedResults = (): {
     correct: number;
     incorrect: number;
@@ -513,8 +520,7 @@ const Practice = () => {
     return { correct, incorrect, skipped, score };
   };
 
-  // Fix the handleSubmitQuiz to calculate results immediately
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = async () => {
     const results = calculateDetailedResults();
     setQuizState((prev) => ({
       ...prev,
@@ -522,6 +528,19 @@ const Practice = () => {
       timeLeft: 0,
       score: results.score,
     }));
+
+    if (user?.id) {
+      await saveQuizAttempt(user.id, {
+        course: practiceForm.course,
+        topic: practiceForm.topic,
+        subtopic: practiceForm.topic,
+        score: results.score,
+        totalQuestions: quizState.questions.length,
+        questionType: practiceForm.type,
+        difficulty: practiceForm.difficulty,
+        attemptedAt: Date.now(),
+      });
+    }
   };
 
   // Remove or fix the problematic useEffect
@@ -573,7 +592,7 @@ const Practice = () => {
       essayAnswers[quizState.currentQuestionIndex] || "";
 
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 relative">
+      <div className="p-6 relative">
         <button
           onClick={confirmCancel}
           className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
@@ -714,7 +733,7 @@ const Practice = () => {
     const { correct: correctCount, incorrect, skipped, score } = results;
 
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="p-6">
         <h3 className="text-2xl font-bold text-center text-gray-900 mb-6">
           Quiz Results
         </h3>
@@ -801,7 +820,7 @@ const Practice = () => {
       {quizState.quizStarted || quizState.loading ? (
         renderQuiz()
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-md">
+        <div className="p-6">
           {/* Tab Navigation */}
           <div className="flex border-b border-gray-200 mb-6">
             <button
@@ -951,6 +970,38 @@ const Practice = () => {
                   ? "Generating..."
                   : "Generate Quiz from Topic"}
               </Button>
+            </div>
+          )}
+
+          {practiceHistory.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                🕘 Recent Quiz Attempts
+              </h3>
+              <div className="space-y-3">
+                {practiceHistory.map((q, index) => (
+                  <div
+                    key={index}
+                    className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">{q.course}</p>
+                      <p className="text-sm text-gray-500">
+                        Topic: {q.topic} | Type: {q.questionType} | Difficulty:{" "}
+                        {q.difficulty}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-blue-600">
+                        {Math.round(q.score)}%
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {q.totalQuestions} Questions
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

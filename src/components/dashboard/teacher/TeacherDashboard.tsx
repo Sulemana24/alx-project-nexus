@@ -567,7 +567,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     Student Management
                   </h2>
                   <p className="text-gray-600">
-                    Monitor and manage your students' progress
+                    Monitor and manage your student progress
                   </p>
                 </div>
 
