@@ -8,6 +8,21 @@ import {
   FirestoreQuizAttempt,
   getQuizHistory,
 } from "@/lib/practiceHistory";
+import {
+  Clock,
+  FileText,
+  Upload,
+  BookOpen,
+  Brain,
+  Zap,
+  Target,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  RotateCcw,
+  AlertTriangle,
+  Sparkles,
+} from "lucide-react";
 
 // --- INTERFACES ---
 interface GeminiQuestionOutput {
@@ -69,12 +84,10 @@ const Practice = () => {
   const [practiceHistory, setPracticeHistory] = useState<
     FirestoreQuizAttempt[]
   >([]);
-
   const [pdfFileId, setPdfFileId] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [essayAnswers, setEssayAnswers] = useState<Record<number, string>>({});
-
   const [pastQuestionsText, setPastQuestionsText] = useState<string>("");
   const [pastQuestionsFile, setPastQuestionsFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<
@@ -109,7 +122,7 @@ const Practice = () => {
   };
 
   const getTimePerQuestion = () => {
-    return 30; // 30 seconds per question for all difficulties
+    return 30;
   };
 
   // --- QUIZ GENERATION ---
@@ -155,7 +168,6 @@ const Practice = () => {
       }
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
-
       const totalQuizTime =
         getTimePerQuestion() * Number(practiceForm.numQuestions);
 
@@ -210,7 +222,6 @@ const Practice = () => {
       }
 
       const responseData = await response.json();
-
       let geminiQuizData: GeminiQuestionOutput[];
 
       if (Array.isArray(responseData)) {
@@ -240,7 +251,6 @@ const Practice = () => {
       }
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
-
       const totalQuizTime =
         getTimePerQuestion() * Number(practiceForm.numQuestions);
 
@@ -261,7 +271,6 @@ const Practice = () => {
         course: "PDF Analysis",
         topic: title || "PDF Content",
       }));
-
       setEssayAnswers({});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -333,7 +342,6 @@ const Practice = () => {
       }
 
       const newQuestions = mapGeminiQuestions(geminiQuizData);
-
       const totalQuizTime =
         getTimePerQuestion() * Number(practiceForm.numQuestions);
 
@@ -353,7 +361,6 @@ const Practice = () => {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Past Questions Quiz Generation Error:", message);
-
       setQuizState((prev) => ({
         ...prev,
         loading: false,
@@ -444,7 +451,6 @@ const Practice = () => {
       setQuizState((prev) => {
         if (prev.timeLeft <= 1) {
           clearInterval(timer);
-          // Directly calculate results here to avoid dependency issues
           const correct = prev.questions.reduce((acc, q, idx) => {
             const answer = prev.userAnswers[idx];
             return acc + (answer === q.correctAnswer ? 1 : 0);
@@ -543,10 +549,8 @@ const Practice = () => {
     }
   };
 
-  // Remove or fix the problematic useEffect
   useEffect(() => {
     if (quizState.quizCompleted) {
-      // This is now handled in handleSubmitQuiz
       console.log("Quiz completed with score:", quizState.score);
     }
   }, [quizState.quizCompleted]);
@@ -555,24 +559,27 @@ const Practice = () => {
   const renderCancelConfirmation = () => {
     if (!showCancelConfirm) return null;
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 max-w-md mx-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Cancel Quiz?
-          </h3>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+          <div className="flex items-center space-x-3 mb-4">
+            <AlertTriangle className="h-6 w-6 text-red-500" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              Cancel Quiz?
+            </h3>
+          </div>
           <p className="text-gray-600 mb-6">
             Are you sure you want to quit this quiz? Your progress will be lost.
           </p>
-          <div className="flex justify-end space-x-3">
+          <div className="flex flex-col sm:flex-row sm:justify-end space-y-3 sm:space-y-0 sm:space-x-3">
             <Button
               onClick={() => setShowCancelConfirm(false)}
-              className="bg-gray-600 hover:bg-gray-700 text-white"
+              className="bg-gray-600 hover:bg-gray-700 text-white w-full sm:w-auto"
             >
               Continue Quiz
             </Button>
             <Button
               onClick={cancelQuiz}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
             >
               Quit Quiz
             </Button>
@@ -592,56 +599,59 @@ const Practice = () => {
       essayAnswers[quizState.currentQuestionIndex] || "";
 
     return (
-      <div className="p-6 relative">
-        <button
-          onClick={confirmCancel}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
-          aria-label="Cancel quiz"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">
-              {practiceForm.course} - {practiceForm.topic}
-            </h3>
-            <p className="text-gray-600">
-              Question {quizState.currentQuestionIndex + 1} of{" "}
-              {quizState.questions.length}
-            </p>
-            <p className="text-sm text-gray-500">
-              Type: {practiceForm.type} • Difficulty: {practiceForm.difficulty}{" "}
-              • Time: {getTimePerQuestion()}s
-            </p>
+      <div className="p-4 sm:p-6 relative bg-white rounded-2xl shadow-sm border border-gray-200">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-2">
+              <Brain className="h-6 w-6 text-blue-600" />
+              <h3 className="text-xl font-bold text-gray-900">
+                {practiceForm.course} - {practiceForm.topic}
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+              <div className="flex items-center space-x-1">
+                <FileText className="h-4 w-4" />
+                <span>
+                  Question {quizState.currentQuestionIndex + 1} of{" "}
+                  {quizState.questions.length}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Zap className="h-4 w-4" />
+                <span>Type: {practiceForm.type}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Target className="h-4 w-4" />
+                <span>Difficulty: {practiceForm.difficulty}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-4 mt-4 md:mt-0">
+
+          <div className="flex items-center space-x-4">
             <div
-              className={`px-4 py-2 rounded-lg font-semibold ${
+              className={`px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 ${
                 quizState.timeLeft <= 10
-                  ? "bg-red-100 text-red-800"
+                  ? "bg-red-100 text-red-800 animate-pulse"
                   : "bg-blue-100 text-blue-800"
               }`}
             >
-              Time Left: {quizState.timeLeft}s
+              <Clock className="h-4 w-4" />
+              <span>Time Left: {quizState.timeLeft}s</span>
             </div>
+            <button
+              onClick={confirmCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Cancel quiz"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-6 mb-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">
+        {/* Question */}
+        <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-6 mb-6 border border-gray-200">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 leading-relaxed">
             {currentQuestion.question}
           </h4>
 
@@ -653,20 +663,21 @@ const Practice = () => {
                   onChange={(e) => handleEssayAnswer(e.target.value)}
                   placeholder="Type your essay response here..."
                   rows={8}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black resize-vertical"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 resize-vertical bg-white"
                 />
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm text-gray-500 gap-2">
                   <div>
                     {currentEssayAnswer.length > 20 && (
-                      <span className="text-green-600 font-medium">
-                        ✓ Response saved
+                      <span className="text-green-600 font-medium flex items-center space-x-1">
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Response saved</span>
                       </span>
                     )}
                   </div>
-                  <div>
-                    Characters: {currentEssayAnswer.length}
+                  <div className="flex items-center space-x-2">
+                    <span>Characters: {currentEssayAnswer.length}</span>
                     {currentEssayAnswer.length < 50 && (
-                      <span className="text-red-500 ml-2">
+                      <span className="text-red-500 text-xs">
                         (Write more for better evaluation)
                       </span>
                     )}
@@ -677,8 +688,10 @@ const Practice = () => {
               currentQuestion.options.map((option: string, index: number) => (
                 <label
                   key={index}
-                  className={`flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors ${
-                    userAnswer === index ? "bg-blue-100 border-blue-300" : ""
+                  className={`flex items-center space-x-3 p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                    userAnswer === index
+                      ? "bg-blue-50 border-blue-300 shadow-sm"
+                      : "bg-white border-gray-200 hover:border-blue-200 hover:bg-blue-25"
                   }`}
                 >
                   <input
@@ -689,35 +702,37 @@ const Practice = () => {
                     onChange={() => handleAnswerSelect(index)}
                     className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-gray-900">{option}</span>
+                  <span className="text-gray-900 font-medium flex-1">
+                    {option}
+                  </span>
                 </label>
               ))
             )}
           </div>
         </div>
 
-        <div className="flex justify-between items-center">
-          <div className="flex space-x-3">
-            <Button
-              onClick={handlePreviousQuestion}
-              disabled={quizState.currentQuestionIndex === 0}
-              className="bg-gray-600 hover:bg-gray-700 text-white"
-            >
-              Previous
-            </Button>
-          </div>
+        {/* Navigation */}
+        <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
+          <Button
+            onClick={handlePreviousQuestion}
+            disabled={quizState.currentQuestionIndex === 0}
+            className="bg-gray-600 hover:bg-gray-700 text-white w-full sm:w-auto"
+          >
+            Previous
+          </Button>
 
           {quizState.currentQuestionIndex === quizState.questions.length - 1 ? (
             <Button
               onClick={handleSubmitQuiz}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto flex items-center space-x-2"
             >
-              Submit Quiz
+              <CheckCircle className="h-4 w-4" />
+              <span>Submit Quiz</span>
             </Button>
           ) : (
             <Button
               onClick={handleNextQuestion}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
             >
               Next Question
             </Button>
@@ -728,69 +743,67 @@ const Practice = () => {
   };
 
   const renderResults = () => {
-    // Calculate results directly instead of relying on state
     const results = calculateDetailedResults();
     const { correct: correctCount, incorrect, skipped, score } = results;
 
     return (
-      <div className="p-6">
-        <h3 className="text-2xl font-bold text-center text-gray-900 mb-6">
-          Quiz Results
-        </h3>
-
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <div className="text-center mb-8">
-          <div className="text-4xl font-bold text-blue-600 mb-2">
-            {Math.round(score)}%
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl font-bold text-white">
+              {Math.round(score)}%
+            </span>
           </div>
-          <div className="text-lg text-gray-600">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">
+            Quiz Completed!
+          </h3>
+          <p className="text-lg text-gray-600 mb-4">
             {correctCount} out of {quizState.questions.length} correct
-          </div>
+          </p>
           <div
-            className={`text-lg font-semibold mt-2 ${
+            className={`text-lg font-semibold px-4 py-2 rounded-full inline-block ${
               score >= 80
-                ? "text-green-600"
+                ? "bg-green-100 text-green-800"
                 : score >= 60
-                ? "text-yellow-600"
-                : "text-red-600"
+                ? "bg-yellow-100 text-yellow-800"
+                : "bg-red-100 text-red-800"
             }`}
           >
             {score >= 80
-              ? "Excellent! 🎉"
+              ? "🎉 Excellent Work!"
               : score >= 60
-              ? "Good Job! 👍"
-              : "Keep Practicing! 💪"}
+              ? "👍 Good Job!"
+              : "💪 Keep Practicing!"}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
+            <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-green-700">
               {correctCount}
             </div>
-            <div className="text-sm font-medium text-green-800">
-              Correct Answers
-            </div>
+            <div className="text-sm font-medium text-green-800">Correct</div>
           </div>
-          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
+          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 text-center">
+            <XCircle className="h-8 w-8 text-red-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-red-700">{incorrect}</div>
-            <div className="text-sm font-medium text-red-800">
-              Incorrect Answers
-            </div>
+            <div className="text-sm font-medium text-red-800">Incorrect</div>
           </div>
-          <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4 text-center">
+          <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4 text-center">
+            <HelpCircle className="h-8 w-8 text-gray-600 mx-auto mb-2" />
             <div className="text-2xl font-bold text-gray-700">{skipped}</div>
-            <div className="text-sm font-medium text-gray-800">
-              Skipped Questions
-            </div>
+            <div className="text-sm font-medium text-gray-800">Skipped</div>
           </div>
         </div>
 
-        <div className="flex justify-center mt-6">
+        <div className="flex justify-center">
           <Button
             onClick={restartQuiz}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-2"
           >
-            Start New Quiz
+            <RotateCcw className="h-4 w-4" />
+            <span>Start New Quiz</span>
           </Button>
         </div>
       </div>
@@ -799,292 +812,336 @@ const Practice = () => {
 
   // --- MAIN RENDER ---
   return (
-    <div className="p-4 md:p-8">
-      <h2 className="text-3xl font-bold mb-6 text-gray-900">
-        🧠 Practice Session Generator
-      </h2>
-
-      {quizState.loading && (
-        <div className="text-lg text-blue-600 mb-4">
-          Generating quiz... This may take a moment for high-quality,
-          non-repetitive questions.
-        </div>
-      )}
-
-      {quizState.error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-          Error: {quizState.error}
-        </div>
-      )}
-
-      {quizState.quizStarted || quizState.loading ? (
-        renderQuiz()
-      ) : (
-        <div className="p-6">
-          {/* Tab Navigation */}
-          <div className="flex border-b border-gray-200 mb-6">
-            <button
-              className={`px-4 py-2 font-medium ${
-                activeTab === "topic"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-              onClick={() => setActiveTab("topic")}
-            >
-              📝 By Topic
-            </button>
-            <button
-              className={`px-4 py-2 font-medium ${
-                activeTab === "pdf"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-              onClick={() => setActiveTab("pdf")}
-            >
-              📚 From PDF Notes
-            </button>
-            <button
-              className={`px-4 py-2 font-medium ${
-                activeTab === "past-questions"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-              onClick={() => setActiveTab("past-questions")}
-            >
-              🎯 From Past Questions
-            </button>
-          </div>
-
-          {/* Shared Quiz Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <label className="block">
-              <span className="text-gray-700">Number of Questions</span>
-              <select
-                value={practiceForm.numQuestions}
-                onChange={(e) =>
-                  handlePracticeFormChange("numQuestions", e.target.value)
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
-              >
-                <option value="5">5 Questions</option>
-                <option value="10">10 Questions</option>
-                <option value="15">15 Questions</option>
-                <option value="20">20 Questions</option>
-                <option value="25">25 Questions</option>
-                <option value="30">30 Questions</option>
-                <option value="35">35 Questions</option>
-                <option value="40">40 Questions</option>
-                <option value="45">45 Questions</option>
-                <option value="50">50 Questions</option>
-                <option value="55">55 Questions</option>
-                <option value="60">60 Questions</option>
-                <option value="65">65 Questions</option>
-                <option value="70">70 Questions</option>
-                <option value="75">75 Questions</option>
-                <option value="80">80 Questions</option>
-                <option value="85">85 Questions</option>
-                <option value="90">90 Questions</option>
-                <option value="95">95 Questions</option>
-                <option value="100">100 Questions</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-gray-700">Difficulty</span>
-              <select
-                value={practiceForm.difficulty}
-                onChange={(e) =>
-                  handlePracticeFormChange("difficulty", e.target.value)
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-gray-700">Question Type</span>
-              <select
-                value={practiceForm.type}
-                onChange={(e) =>
-                  handlePracticeFormChange(
-                    "type",
-                    e.target.value as PracticeForm["type"]
-                  )
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
-              >
-                <option value="multiple-choice">Multiple Choice</option>
-                <option value="true-false">True/False</option>
-                <option value="fill-in">Fill-in-the-Blank</option>
-                <option value="essay">Essay / Free Response</option>
-              </select>
-            </label>
-          </div>
-
-          {/* Tab Content */}
-          {activeTab === "topic" && (
-            <div>
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                Generate Quiz by Topic
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <label className="block">
-                  <span className="text-gray-700">Course / Subject</span>
-                  <input
-                    type="text"
-                    value={practiceForm.course}
-                    onChange={(e) =>
-                      handlePracticeFormChange("course", e.target.value)
-                    }
-                    placeholder="e.g., Organic Chemistry"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-gray-700">Topic / Sub-topic</span>
-                  <input
-                    type="text"
-                    value={practiceForm.topic}
-                    onChange={(e) =>
-                      handlePracticeFormChange("topic", e.target.value)
-                    }
-                    placeholder="e.g., Alkanes Naming Conventions"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-black"
-                  />
-                </label>
-              </div>
-              <Button
-                onClick={generateRandomQuiz}
-                disabled={
-                  quizState.loading ||
-                  !practiceForm.topic ||
-                  !practiceForm.course
-                }
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {quizState.loading
-                  ? "Generating..."
-                  : "Generate Quiz from Topic"}
-              </Button>
+    <div className="min-h-screen sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <div className="p-3 bg-white rounded-2xl shadow-sm">
+              <Sparkles className="h-8 w-8 text-blue-600" />
             </div>
-          )}
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-black mb-2">
+            AI Practice Session Generator
+          </h1>
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+            Generate personalized quizzes from topics, PDFs, or past questions
+            using AI
+          </p>
+        </div>
 
-          {practiceHistory.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                🕘 Recent Quiz Attempts
-              </h3>
-              <div className="space-y-3">
-                {practiceHistory.map((q, index) => (
-                  <div
-                    key={index}
-                    className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center"
+        {/* Loading State */}
+        {quizState.loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 text-center mb-6">
+            <div className="flex items-center justify-center space-x-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="text-blue-700 font-medium">
+                Generating quiz... This may take a moment for high-quality
+                questions.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {quizState.error && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-center space-x-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+              <div>
+                <p className="text-red-700 font-medium">Error</p>
+                <p className="text-red-600 text-sm">{quizState.error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quiz Interface */}
+        {quizState.quizStarted || quizState.loading ? (
+          renderQuiz()
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* Tab Navigation */}
+            <div className="border-b border-gray-200">
+              <div className="flex overflow-x-auto">
+                {[
+                  { id: "topic" as const, label: "By Topic", icon: BookOpen },
+                  { id: "pdf" as const, label: "From PDF", icon: FileText },
+                  {
+                    id: "past-questions" as const,
+                    label: "Past Questions",
+                    icon: Target,
+                  },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    className={`flex items-center space-x-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${
+                      activeTab === tab.id
+                        ? "border-b-2 border-blue-600 text-blue-600 bg-blue-50"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setActiveTab(tab.id)}
                   >
-                    <div>
-                      <p className="font-medium text-gray-900">{q.course}</p>
-                      <p className="text-sm text-gray-500">
-                        Topic: {q.topic} | Type: {q.questionType} | Difficulty:{" "}
-                        {q.difficulty}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-blue-600">
-                        {Math.round(q.score)}%
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {q.totalQuestions} Questions
-                      </p>
-                    </div>
-                  </div>
+                    <tab.icon className="h-5 w-5" />
+                    <span>{tab.label}</span>
+                  </button>
                 ))}
               </div>
             </div>
-          )}
 
-          {activeTab === "pdf" && (
-            <div>
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                Generate Quiz from PDF Notes
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                The AI will generate questions based *only* on the content of
-                your uploaded file.
-              </p>
-              <PDFUpload
-                onProcessed={handlePDFProcessed}
-                loading={pdfLoading}
-                setLoading={setPdfLoading}
-                formCriteria={practiceForm}
-              />
-            </div>
-          )}
+            <div className="p-6">
+              {/* Shared Quiz Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Number of Questions
+                  </label>
+                  <select
+                    value={practiceForm.numQuestions}
+                    onChange={(e) =>
+                      handlePracticeFormChange("numQuestions", e.target.value)
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  >
+                    {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((num) => (
+                      <option key={num} value={num.toString()}>
+                        {num} Questions
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {activeTab === "past-questions" && (
-            <div>
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                Generate Quiz from Past Questions
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Upload past questions or paste them below. The AI will generate
-                new questions in the same style and format.
-              </p>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Difficulty
+                  </label>
+                  <select
+                    value={practiceForm.difficulty}
+                    onChange={(e) =>
+                      handlePracticeFormChange("difficulty", e.target.value)
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
 
-              <div className="mb-4">
-                <label className="block mb-2">
-                  <span className="text-gray-700">
-                    Upload Past Questions File
-                  </span>
-                </label>
-                <input
-                  type="file"
-                  accept=".txt,.pdf,.doc,.docx"
-                  onChange={handlePastQuestionsFileUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Supported formats: TXT, PDF, DOC, DOCX
-                </p>
-                {pastQuestionsFile && (
-                  <p className="text-sm text-green-600 mt-2">
-                    ✓ File selected: {pastQuestionsFile.name}
-                  </p>
-                )}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Question Type
+                  </label>
+                  <select
+                    value={practiceForm.type}
+                    onChange={(e) =>
+                      handlePracticeFormChange(
+                        "type",
+                        e.target.value as PracticeForm["type"]
+                      )
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  >
+                    <option value="multiple-choice">Multiple Choice</option>
+                    <option value="true-false">True/False</option>
+                    <option value="fill-in">Fill-in-the-Blank</option>
+                    <option value="essay">Essay / Free Response</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="mb-6">
-                <label className="block mb-2">
-                  <span className="text-gray-700">Or Paste Past Questions</span>
-                </label>
-                <textarea
-                  value={pastQuestionsText}
-                  onChange={(e) => setPastQuestionsText(e.target.value)}
-                  placeholder="Paste your past questions here...&#10;Example:&#10;1. What is the derivative of x²?&#10;A) x&#10;B) 2x&#10;C) 2&#10;D) x²&#10;Answer: B&#10;&#10;2. Solve for x: 2x + 5 = 15&#10;A) 5&#10;B) 10&#10;C) 7.5&#10;D) 2.5&#10;Answer: A"
-                  rows={8}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black resize-vertical"
-                />
-              </div>
+              {/* Tab Content */}
+              {activeTab === "topic" && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Course / Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={practiceForm.course}
+                        onChange={(e) =>
+                          handlePracticeFormChange("course", e.target.value)
+                        }
+                        placeholder="e.g., Organic Chemistry"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400"
+                      />
+                    </div>
 
-              <Button
-                onClick={handlePastQuestionsProcessed}
-                disabled={
-                  quizState.loading ||
-                  (!pastQuestionsText && !pastQuestionsFile)
-                }
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                {quizState.loading
-                  ? "Generating..."
-                  : "Generate Quiz from Past Questions"}
-              </Button>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Topic / Sub-topic
+                      </label>
+                      <input
+                        type="text"
+                        value={practiceForm.topic}
+                        onChange={(e) =>
+                          handlePracticeFormChange("topic", e.target.value)
+                        }
+                        placeholder="e.g., Alkanes Naming Conventions"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={generateRandomQuiz}
+                    disabled={
+                      quizState.loading ||
+                      !practiceForm.topic ||
+                      !practiceForm.course
+                    }
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-semibold text-lg"
+                  >
+                    {quizState.loading
+                      ? "Generating..."
+                      : "Generate Quiz from Topic"}
+                  </Button>
+                </div>
+              )}
+
+              {activeTab === "pdf" && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <FileText className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Generate Quiz from PDF Notes
+                    </h3>
+                    <p className="text-gray-600">
+                      The AI will generate questions based on the content of
+                      your uploaded file
+                    </p>
+                  </div>
+                  <PDFUpload
+                    onProcessed={handlePDFProcessed}
+                    loading={pdfLoading}
+                    setLoading={setPdfLoading}
+                    formCriteria={practiceForm}
+                  />
+                </div>
+              )}
+
+              {activeTab === "past-questions" && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <Target className="h-12 w-12 text-purple-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Generate Quiz from Past Questions
+                    </h3>
+                    <p className="text-gray-600">
+                      Upload past questions or paste them below. The AI will
+                      generate new questions in the same style.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Upload Past Questions File
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                        <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+                        <input
+                          type="file"
+                          accept=".txt,.pdf,.doc,.docx"
+                          onChange={handlePastQuestionsFileUpload}
+                          className="hidden"
+                          id="past-questions-file"
+                        />
+                        <label
+                          htmlFor="past-questions-file"
+                          className="cursor-pointer"
+                        >
+                          <p className="text-gray-600 mb-2">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            TXT, PDF, DOC, DOCX files supported
+                          </p>
+                        </label>
+                      </div>
+                      {pastQuestionsFile && (
+                        <p className="text-green-600 text-sm mt-2 flex items-center space-x-1">
+                          <CheckCircle className="h-4 w-4" />
+                          <span>File selected: {pastQuestionsFile.name}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Or Paste Past Questions
+                      </label>
+                      <textarea
+                        value={pastQuestionsText}
+                        onChange={(e) => setPastQuestionsText(e.target.value)}
+                        placeholder={`Paste your past questions here...\n\nExample:\n1. What is the derivative of x²?\nA) x\nB) 2x\nC) 2\nD) x²\nAnswer: B\n\n2. Solve for x: 2x + 5 = 15\nA) 5\nB) 10\nC) 7.5\nD) 2.5\nAnswer: A`}
+                        rows={8}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 resize-vertical"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handlePastQuestionsProcessed}
+                    disabled={
+                      quizState.loading ||
+                      (!pastQuestionsText && !pastQuestionsFile)
+                    }
+                    className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white py-4 rounded-xl font-semibold text-lg"
+                  >
+                    {quizState.loading
+                      ? "Generating..."
+                      : "Generate Quiz from Past Questions"}
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
-      {renderCancelConfirmation()}
+          </div>
+        )}
+
+        {/* Recent Quiz History */}
+        {practiceHistory.length > 0 && !quizState.quizStarted && (
+          <div className="mt-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+              <Clock className="h-5 w-5 text-blue-600" />
+              <span>Recent Quiz Attempts</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {practiceHistory.map((q, index) => (
+                <div
+                  key={index}
+                  className="p-4 border border-gray-200 rounded-xl bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">{q.course}</p>
+                      <p className="text-sm text-gray-500">Topic: {q.topic}</p>
+                    </div>
+                    <div
+                      className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        q.score >= 80
+                          ? "bg-green-100 text-green-800"
+                          : q.score >= 60
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {Math.round(q.score)}%
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Type: {q.questionType}</span>
+                    <span>{q.totalQuestions} Qs</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {renderCancelConfirmation()}
+      </div>
     </div>
   );
 };
