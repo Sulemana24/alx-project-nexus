@@ -104,7 +104,7 @@ const AdminDashboard = ({
             isSidebarOpen && !isMobile ? "lg:ml-64" : "ml-0"
           }`}
         >
-          <div className="p-4 sm:p-6 lg:p-8">
+          <div className="sm:p-6 lg:p-8">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8">
               {renderActivePage()}
             </div>

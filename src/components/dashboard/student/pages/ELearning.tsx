@@ -15,6 +15,7 @@ import {
   FirestoreRecentVideo,
   RecentVideoDoc,
 } from "@/lib/recentVideos";
+import { Play, Trash2 } from "lucide-react";
 
 // Extend VideoResource with optional Firestore fields
 type VideoWithOptionalFields = VideoResource & {
@@ -100,7 +101,7 @@ const ELearning = () => {
         createdBy: d.createdBy || "",
         youtubeUrl: d.youtubeUrl,
         completedAt: d.completedAt ?? 0,
-        duration: String(d.duration ?? ""), // keep as string
+        duration: String(d.duration ?? ""),
         category: d.category || "",
         views: d.views ?? 0,
         uploadDate:
@@ -108,7 +109,7 @@ const ELearning = () => {
             ? d.uploadDate
             : d.uploadDate
             ? new Date(d.uploadDate)
-            : new Date(), // fallback to now
+            : new Date(),
       }));
 
       setRecentVideos(formattedDocs);
@@ -349,24 +350,36 @@ const ELearning = () => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setSelectedVideo(video)}
-                      className={`flex-1 py-2 rounded-lg text-white ${
+                      className={`flex-1 py-3 rounded-xl text-white font-semibold transition-all duration-300 flex items-center justify-center space-x-2 ${
                         videoProgress[video.id] === 100
-                          ? "bg-green-500 hover:bg-green-600"
-                          : "bg-blue-500 hover:bg-blue-600"
+                          ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl"
+                          : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl"
                       }`}
                     >
-                      {videoProgress[video.id] === 100
-                        ? "Watch Again"
-                        : "Continue Watching"}
+                      {videoProgress[video.id] === 100 ? (
+                        <>
+                          <Play className="h-4 w-4" />
+                          <span className="hidden xs:inline">Watch Again</span>
+                          <span className="xs:hidden">Again</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4" />
+                          <span className="hidden xs:inline">
+                            Continue Watching
+                          </span>
+                          <span className="xs:hidden">Continue</span>
+                        </>
+                      )}
                     </button>
 
                     {/* Delete button */}
                     <button
                       onClick={() => handleDeleteRecent(video.id)}
-                      className="w-12 flex-none rounded-lg bg-red-500 hover:bg-red-600 text-white"
+                      className="w-12 sm:w-14 flex-none rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center"
                       title="Remove from recent"
                     >
-                      Del
+                      <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                     </button>
                   </div>
                 </div>
