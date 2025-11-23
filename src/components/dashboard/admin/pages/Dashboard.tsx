@@ -4,15 +4,25 @@ import React, { useEffect, useState } from "react";
 import {
   Users,
   FileText,
-  TrendingUp,
-  Download,
+  Clock,
   AlertCircle,
   CheckCircle2,
-  Clock,
+  TrendingUp,
+  Download,
+  Eye,
+  BarChart3,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  Timestamp,
+} from "firebase/firestore";
 
 interface User {
   id: string;
@@ -22,7 +32,13 @@ interface User {
   role: "student" | "teacher" | "admin";
   plan: "free" | "student_pro" | "teacher_pro";
   institution: string;
-  createdAt: string;
+  createdAt: Timestamp | string;
+}
+
+interface PastQuestion {
+  id: string;
+  title: string;
+  createdAt: Timestamp | string;
 }
 
 interface Activity {
@@ -37,49 +53,60 @@ interface Activity {
 
 const Dashboard: React.FC = () => {
   const [totalUsers, setTotalUsers] = useState(0);
+  const [userGrowth, setUserGrowth] = useState("+0 this week");
+
+  const [pastQuestionsCount, setPastQuestionsCount] = useState(0);
+  const [pastQuestionsGrowth, setPastQuestionsGrowth] = useState(0);
+
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
 
-  const [previousUsers, setPreviousUsers] = useState(0);
-  const [userGrowth, setUserGrowth] = useState("+0%");
+  const toDate = (value: Timestamp | string) =>
+    value instanceof Timestamp ? value.toDate() : new Date(value);
 
-  // Fetch total users (excluding admins)
   const fetchUsers = async () => {
-    const usersCollection = collection(db, "users");
-    const snapshot = await getDocs(usersCollection);
-
-    const usersData: User[] = snapshot.docs
-      .map((doc) => {
-        const { id: _discardedId, ...data } = doc.data() as User; // discard Firestore 'id'
-        return {
-          id: doc.id, // always use Firestore doc ID
-          ...data,
-        };
-      })
+    const snapshot = await getDocs(collection(db, "users"));
+    const allUsers: User[] = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<User, "id">) }))
       .filter((user) => user.role !== "admin");
 
-    const currentCount = usersData.length;
-    setTotalUsers(currentCount);
+    setTotalUsers(allUsers.length);
 
-    const prevCount = previousUsers || currentCount - 10;
-    setUserGrowth(
-      `${(((currentCount - prevCount) / prevCount) * 100).toFixed(1)}%`
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const usersThisWeek = allUsers.filter(
+      (u) => toDate(u.createdAt) > oneWeekAgo
     );
+    setUserGrowth(`+${usersThisWeek.length} this week`);
   };
 
-  // Fetch recent activity (latest 5 entries)
+  const fetchPastQuestions = async () => {
+    const snapshot = await getDocs(collection(db, "pastQuestions"));
+    const allQuestions: PastQuestion[] = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<PastQuestion, "id">),
+    }));
+
+    setPastQuestionsCount(allQuestions.length);
+
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const questionsThisWeek = allQuestions.filter(
+      (q) => q.createdAt && toDate(q.createdAt) > oneWeekAgo
+    );
+
+    setPastQuestionsGrowth(questionsThisWeek.length);
+  };
+
   const fetchRecentActivity = async () => {
-    const activityCollection = collection(db, "activity");
-    const q = query(activityCollection, orderBy("time", "desc"), limit(5));
+    const q = query(
+      collection(db, "activity"),
+      orderBy("time", "desc"),
+      limit(5)
+    );
     const snapshot = await getDocs(q);
 
-    const activities: Activity[] = snapshot.docs.map((doc) => {
-      // Destructure and discard any 'id' from Firestore data
-      const { id: _discardedId, ...data } = doc.data() as Activity;
-      return {
-        id: doc.id, // use Firestore document ID
-        ...data,
-      };
-    });
+    const activities: Activity[] = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<Activity, "id">),
+    }));
 
     setRecentActivity(activities);
   };
@@ -88,6 +115,7 @@ const Dashboard: React.FC = () => {
     const loadData = async () => {
       try {
         await fetchUsers();
+        await fetchPastQuestions();
         await fetchRecentActivity();
       } catch (err) {
         console.error("Error loading dashboard data:", err);
@@ -96,26 +124,6 @@ const Dashboard: React.FC = () => {
 
     loadData();
   }, []);
-
-  const dashboardData = {
-    totalUsers: totalUsers.toLocaleString(),
-    userGrowth,
-    totalQuestions: "45,120",
-    questionGrowth: "150",
-    revenue: "$48,250",
-    revenueGrowth: "+5.1%",
-    pendingActions: 17,
-    activeSessions: "892",
-    systemUptime: "99.98%",
-    responseTime: "1.2s",
-  };
-
-  const contentStats = [
-    { label: "Flagged Content", value: "12", color: "text-blue-600" },
-    { label: "Pending Reviews", value: "5", color: "text-amber-600" },
-    { label: "New Institutions", value: "3", color: "text-green-600" },
-    { label: "Active Licenses", value: "152", color: "text-purple-600" },
-  ];
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -132,221 +140,318 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-amber-100 text-amber-800 border-amber-200";
+      case "new":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "success":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "error":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900">
-            Platform Overview
-          </h2>
-          <p className="text-gray-600 mt-2">
-            Welcome back! Here&apos;s what&apos;s happening with your platform
-            today.
-          </p>
-        </div>
-        <div className="mt-4 sm:mt-0">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Download className="h-4 w-4 mr-2" />
-            Generate Report
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <BarChart3 className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                  Dashboard Overview
+                </h1>
+                <p className="text-gray-600 text-lg mt-1">
+                  Monitor your platform performance and activity
+                </p>
+              </div>
+            </div>
+          </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Users Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Users</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {dashboardData.totalUsers}
-              </p>
-              <p className="text-sm text-green-600 mt-1">
-                {dashboardData.userGrowth} this month
-              </p>
-            </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <Users className="h-6 w-6 text-blue-600" />
-            </div>
+          <div className="flex items-center gap-3">
+            <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 px-6 py-3 rounded-xl cursor-pointer">
+              <Download className="h-4 w-4" />
+              <span>Export Report</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center gap-2 px-6 py-3 rounded-xl cursor-pointer"
+            >
+              <Eye className="h-4 w-4" />
+              <span>View Analytics</span>
+            </Button>
           </div>
         </div>
 
-        {/* Questions Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Past Questions
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {dashboardData.totalQuestions}
-              </p>
-              <p className="text-sm text-green-600 mt-1">
-                +{dashboardData.questionGrowth} this week
-              </p>
-            </div>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <FileText className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        {/* Revenue Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Monthly Revenue
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {dashboardData.revenue}
-              </p>
-              <p className="text-sm text-green-600 mt-1">
-                {dashboardData.revenueGrowth} vs last month
-              </p>
-            </div>
-            <div className="bg-purple-50 p-3 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-
-        {/* System Health Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Pending Actions
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {dashboardData.pendingActions}
-              </p>
-              <p className="text-sm text-amber-600 mt-1">Attention required</p>
-            </div>
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <AlertCircle className="h-6 w-6 text-amber-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Platform Performance */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Platform Performance
-          </h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Active Sessions</span>
-              <span className="font-semibold text-gray-900">{totalUsers}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">System Uptime</span>
-              <span className="font-semibold text-green-600">
-                {dashboardData.systemUptime}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Avg. Response Time</span>
-              <span className="font-semibold text-gray-900">
-                {dashboardData.responseTime}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">
-                Partner Institutions
-              </span>
-              <span className="font-semibold text-gray-900">48</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm lg:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Recent Activity
-          </h3>
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div
-                key={activity.id}
-                className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                {getStatusIcon(activity.status)}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">
-                    {activity.action}
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+          {/* Total Users Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600">
+                    Total Users
+                  </span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {totalUsers.toLocaleString()}
                   </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {activity.user && `User: ${activity.user}`}
-                    {activity.institution &&
-                      `Institution: ${activity.institution}`}
-                    {activity.amount && `Amount: ${activity.amount}`}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <p className="text-sm font-medium text-green-600">
+                      {userGrowth}
+                    </p>
+                  </div>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Content Statistics */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Content Overview
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {contentStats.map((stat, index) => (
-            <div
-              key={index}
-              className="text-center p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-            >
-              <div className={`text-2xl font-bold ${stat.color}`}>
-                {stat.value}
+          {/* Past Questions Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600">
+                    Past Questions
+                  </span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {pastQuestionsCount.toLocaleString()}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <p className="text-sm font-medium text-green-600">
+                      +{pastQuestionsGrowth} this week
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="text-sm text-gray-600 mt-1">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* System Health */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          System Health & Alerts
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-              <span className="text-sm font-medium text-green-800">
-                API Status
-              </span>
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-            </div>
-            <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
-              <span className="text-sm font-medium text-amber-800">
-                Moderation Queue
-              </span>
-              <span className="text-amber-600 font-semibold">17 items</span>
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-              <span className="text-sm font-medium text-blue-800">
-                Outstanding Payments
-              </span>
-              <span className="text-blue-600 font-semibold">$7,500</span>
+
+          {/* Additional Stat Cards - Placeholder for future metrics */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600">
+                    Active Sessions
+                  </span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-gray-900">1,234</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <p className="text-sm font-medium text-green-600">
+                      +12% today
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-              <span className="text-sm font-medium text-green-800">
-                Database Health
-              </span>
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+                    <Download className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600">
+                    Downloads
+                  </span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-gray-900">8,567</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <p className="text-sm font-medium text-green-600">
+                      +24% this month
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Recent Activity - Takes 2/3 on large screens */}
+          <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      Recent Activity
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Latest actions and events on your platform
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors rounded-xl"
+                >
+                  View All
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity) => (
+                    <div
+                      key={activity.id}
+                      className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-xl transition-all duration-200 group border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex-shrink-0 mt-1">
+                        {getStatusIcon(activity.status)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <p className="text-base font-semibold text-gray-900">
+                            {activity.action}
+                          </p>
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                              activity.status
+                            )}`}
+                          >
+                            {activity.status.charAt(0).toUpperCase() +
+                              activity.status.slice(1)}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {activity.user && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">User:</span>{" "}
+                              {activity.user}
+                            </p>
+                          )}
+                          {activity.institution && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Institution:</span>{" "}
+                              {activity.institution}
+                            </p>
+                          )}
+                          {activity.amount && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Amount:</span>{" "}
+                              {activity.amount}
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2 font-medium">
+                          {activity.time}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Activity className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-gray-500 text-lg font-semibold mb-2">
+                      No recent activity
+                    </p>
+                    <p className="text-gray-400 text-sm">
+                      Activity will appear here as users interact with your
+                      platform
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats Sidebar */}
+          <div className="space-y-6">
+            {/* Platform Health */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                  <CheckCircle2 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-gray-900">
+                    Platform Status
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    All systems operational
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                  <span className="text-sm font-medium text-green-800">
+                    API Services
+                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                  <span className="text-sm font-medium text-green-800">
+                    Database
+                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                  <span className="text-sm font-medium text-green-800">
+                    File Storage
+                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <h4 className="text-lg font-bold text-gray-900 mb-4">
+                Quick Actions
+              </h4>
+              <div className="space-y-3">
+                <Button className="w-full justify-start bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors rounded-xl py-3">
+                  <Users className="h-4 w-4 mr-3" />
+                  Manage Users
+                </Button>
+                <Button className="w-full justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors rounded-xl py-3">
+                  <FileText className="h-4 w-4 mr-3" />
+                  View Questions
+                </Button>
+                <Button className="w-full justify-start bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors rounded-xl py-3">
+                  <BarChart3 className="h-4 w-4 mr-3" />
+                  Analytics Report
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,22 +3,18 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import CountUp from "react-countup";
 import { getQuizHistory } from "@/lib/practiceHistory";
+
 import { getRecentVideos } from "@/lib/recentVideos";
 import {
   TrendingUp,
-  Video,
   FileText,
   PlayCircle,
   Brain,
   Award,
-  Zap,
   Target,
-  Users,
   Activity,
   FileQuestion,
-  BookMarked,
   History,
-  Upload,
   Clock4,
 } from "lucide-react";
 

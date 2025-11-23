@@ -1,25 +1,66 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 interface HeaderProps {
-  userName: string;
-  userEmail: string;
-  userPlan: string;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
-const Header = ({
-  userName,
-  userEmail,
-  userPlan,
-  isSidebarOpen,
-  setIsSidebarOpen,
-}: HeaderProps) => {
+const Header = ({ isSidebarOpen, setIsSidebarOpen }: HeaderProps) => {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [userName, setUserName] = useState("User");
+  const [userEmail, setUserEmail] = useState("");
+  const [userPlan, setUserPlan] = useState("free");
 
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user data from Firebase
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?.id) return;
+
+      try {
+        const docRef = doc(db, "users", user.id);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setUserName(`${data.firstName} ${data.lastName}`);
+          setUserEmail(data.email);
+          setUserPlan(data.plan ?? "free");
+        }
+      } catch (err) {
+        console.error("Failed to fetch user data:", err);
+      }
+    };
+
+    fetchUserData();
+  }, [user?.id]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const formattedPlan = userPlan
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-40">
@@ -55,8 +96,12 @@ const Header = ({
         </div>
 
         {/* Right side actions */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
-          {userPlan === "free" && (
+        <div
+          className="flex items-center space-x-3 sm:space-x-4"
+          ref={dropdownRef}
+        >
+          {/* Upgrade Plan button only for free users */}
+          {userPlan.toLowerCase() === "free" && (
             <button className="bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
               Upgrade Plan
             </button>
@@ -84,12 +129,12 @@ const Header = ({
                     <span className="text-sm text-gray-600">Plan</span>
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        userPlan === "student pro"
+                        userPlan.toLowerCase().includes("pro")
                           ? "bg-green-100 text-green-800"
                           : "bg-blue-100 text-blue-800"
                       }`}
                     >
-                      {userPlan === "student pro" ? "Student Pro" : "Free"}
+                      {formattedPlan}
                     </span>
                   </div>
                 </div>
