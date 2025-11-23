@@ -72,9 +72,6 @@ const StudentDashboard = ({
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
-        userName={userName}
-        userEmail={userEmail}
-        userPlan={userPlan}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
       />
