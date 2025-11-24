@@ -400,7 +400,7 @@ const Passco = () => {
             <span className="text-2xl">📚</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-black mb-3">
-            Past Questions Library
+            Past Questions Bank
           </h1>
           <p className="text-gray-600 text-lg max-w-2xl mx-auto">
             Discover and access examination questions from various universities

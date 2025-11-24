@@ -19,11 +19,7 @@ interface StudentDashboardProps {
   userPlan: string;
 }
 
-const StudentDashboard = ({
-  userName,
-  userEmail,
-  userPlan,
-}: StudentDashboardProps) => {
+const StudentDashboard = ({ userName }: StudentDashboardProps) => {
   const { user, isLoading } = useAuth();
   const [activeSidebarItem, setActiveSidebarItem] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
