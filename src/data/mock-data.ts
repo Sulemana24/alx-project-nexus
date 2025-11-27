@@ -95,6 +95,8 @@ export const mockQuizzes: Quiz[] = [
     creator: mockUsers[1],
     totalMarks: 20,
     participantCount: 45,
+    courseCode: "MATH101",
+    averageScore: 78,
     questions: [
       {
         id: "q-1",
@@ -147,6 +149,8 @@ export const mockQuizzes: Quiz[] = [
     creator: mockUsers[1],
     totalMarks: 15,
     participantCount: 38,
+    courseCode: "MATH101",
+    averageScore: 78,
     questions: [
       {
         id: "q-4",
@@ -177,7 +181,7 @@ export const mockQuizAttempts: QuizAttempt[] = [
     id: "attempt-1",
     score: 18,
     totalMarks: 20,
-    timeSpent: 1420, // 23 minutes 40 seconds
+    timeSpent: 1420,
     completedAt: new Date("2024-02-02T10:30:00"),
     studentId: "user-1",
     student: mockUsers[0],

@@ -45,6 +45,9 @@ export interface Quiz {
   attempts?: QuizAttempt[];
   totalMarks: number;
   participantCount: number;
+  downloads?: number;
+  courseCode?: string;
+  averageScore?: number;
 }
 
 export interface Question {

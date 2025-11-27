@@ -1,6 +1,6 @@
 "use client";
 
-import { TeacherDashboard } from "@/components/dashboard/teacher/TeacherDashboard";
+import TeacherDashboard from "@/components/dashboard/teacher/TeacherDashboard"; // ✅ default import
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
